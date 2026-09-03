@@ -27,11 +27,13 @@ export default function Home() {
 
   return (
     <main style={{ padding: '2rem' }}>
-      <h1>Products</h1>
             <h1>Products</h1>
       <a href="/products/new" style={{ display: 'inline-block', marginBottom: 16, padding: '8px 16px', background: '#0070f3', color: 'white', textDecoration: 'none', borderRadius: 4 }}>
         + Add Product
       </a>
+      <a href="/invoices/new" style={{ display: 'inline-block', marginBottom: 16, marginLeft: 8, padding: '8px 16px', background: '#22c55e', color: 'white', textDecoration: 'none', borderRadius: 4 }}>
+  + New Invoice
+</a>
       {error && <p style={{ color: 'red' }}>Error: {error.message}</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>

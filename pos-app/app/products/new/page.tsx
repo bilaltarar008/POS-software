@@ -9,6 +9,7 @@ export default function NewProductPage() {
   const [categoryId, setCategoryId] = useState('')
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
+  const [costPrice, setCostPrice] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const router = useRouter()
@@ -31,6 +32,7 @@ export default function NewProductPage() {
       category_id: categoryId,
       name: name,
       price_per_maund: parseFloat(price),
+      cost_price_per_maund: parseFloat(costPrice) || 0,
     })
 
     if (error) {
@@ -73,6 +75,16 @@ export default function NewProductPage() {
           step="0.01"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
+          required
+          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+        />
+
+        <label style={{ display: 'block', marginBottom: 4 }}>Cost Price per Maund (what you pay)</label>
+        <input
+          type="number"
+          step="0.01"
+          value={costPrice}
+          onChange={(e) => setCostPrice(e.target.value)}
           required
           style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
         />

@@ -33,6 +33,10 @@ export default function InvoiceViewPage() {
   if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
   if (!invoice) return <main style={{ padding: '2rem' }}>Invoice not found</main>
 
+  const balanceDue = invoice.total - invoice.amount_paid
+  const status = balanceDue <= 0 ? 'Paid' : invoice.amount_paid > 0 ? 'Partially Paid' : 'On Credit'
+  const statusColor = balanceDue <= 0 ? '#16a34a' : invoice.amount_paid > 0 ? '#d97706' : '#dc2626'
+
   return (
     <main style={{ padding: '2rem', maxWidth: 700 }}>
       <button onClick={() => window.print()} style={{ marginBottom: 16, padding: '8px 16px' }}>
@@ -41,6 +45,10 @@ export default function InvoiceViewPage() {
       <h1>Invoice</h1>
       <p><strong>Customer:</strong> {invoice.parties?.name}</p>
       <p><strong>Date:</strong> {invoice.invoice_date}</p>
+      <p>
+        <strong>Status:</strong>{' '}
+        <span style={{ color: statusColor, fontWeight: 'bold' }}>{status}</span>
+      </p>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
         <thead>
@@ -63,7 +71,13 @@ export default function InvoiceViewPage() {
         </tbody>
       </table>
 
-      <h2 style={{ marginTop: 16 }}>Grand Total: Rs. {invoice.total}</h2>
+      <div style={{ marginTop: 16 }}>
+        <p><strong>Grand Total:</strong> Rs. {invoice.total}</p>
+        <p><strong>Paid:</strong> Rs. {invoice.amount_paid}</p>
+        <p style={{ color: balanceDue > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>
+          Balance Due: Rs. {balanceDue.toFixed(2)}
+        </p>
+      </div>
     </main>
   )
 }

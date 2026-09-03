@@ -1,5 +1,4 @@
 'use client'
-
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -10,6 +9,7 @@ export default function EditProductPage() {
   const [categories, setCategories] = useState<any[]>([])
   const [categoryId, setCategoryId] = useState('')
   const [name, setName] = useState('')
+  const [costPrice, setCostPrice] = useState('')
   const [price, setPrice] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -32,6 +32,7 @@ export default function EditProductPage() {
         setCategoryId(product.category_id)
         setName(product.name)
         setPrice(product.price_per_maund.toString())
+        setCostPrice(product.cost_price_per_maund.toString())
       }
       setLoading(false)
     }
@@ -42,16 +43,15 @@ export default function EditProductPage() {
     e.preventDefault()
     setSaving(true)
     setError('')
-
     const { error } = await supabase
       .from('products')
       .update({
         category_id: categoryId,
         name: name,
         price_per_maund: parseFloat(price),
+        cost_price_per_maund: parseFloat(costPrice) || 0,
       })
       .eq('id', id)
-
     if (error) {
       setError(error.message)
       setSaving(false)
@@ -97,8 +97,16 @@ export default function EditProductPage() {
           style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
         />
 
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        <label style={{ display: 'block', marginBottom: 4 }}>Cost Price per Maund (40kg)</label>
+        <input
+          type="number"
+          step="0.01"
+          value={costPrice}
+          onChange={(e) => setCostPrice(e.target.value)}
+          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+        />
 
+        {error && <p style={{ color: 'red' }}>{error}</p>}
         <button type="submit" disabled={saving} style={{ padding: '8px 16px' }}>
           {saving ? 'Saving...' : 'Update Product'}
         </button>

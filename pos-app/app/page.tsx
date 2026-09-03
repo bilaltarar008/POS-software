@@ -28,13 +28,18 @@ export default function Home() {
   return (
     <main style={{ padding: '2rem' }}>
       <h1>Products</h1>
+            <h1>Products</h1>
+      <a href="/products/new" style={{ display: 'inline-block', marginBottom: 16, padding: '8px 16px', background: '#0070f3', color: 'white', textDecoration: 'none', borderRadius: 4 }}>
+        + Add Product
+      </a>
       {error && <p style={{ color: 'red' }}>Error: {error.message}</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
+                <thead>
           <tr style={{ textAlign: 'left', borderBottom: '2px solid #ccc' }}>
             <th>Category</th>
             <th>Product</th>
             <th>Price / Maund (40kg)</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -43,9 +48,19 @@ export default function Home() {
               <td>{p.categories?.name}</td>
               <td>{p.name}</td>
               <td>Rs. {p.price_per_maund}</td>
+              <td><a href={`/products/${p.id}/edit`}>Edit</a></td>
             </tr>
           ))}
         </tbody>
+        {/* <tbody>
+          {products.map((p: any) => (
+            <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+              <td>{p.categories?.name}</td>
+              <td>{p.name}</td>
+              <td>Rs. {p.price_per_maund}</td>
+            </tr>
+          ))}
+        </tbody> */}
       </table>
     </main>
   )

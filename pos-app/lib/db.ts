@@ -9,6 +9,24 @@ export interface LocalProduct {
   category_name?: string // denormalized for easy offline display
 }
 
+export interface LocalParty {
+  id: string
+  name: string
+  type: string
+  brokerage_fee_percent?: number
+
+}
+
+export interface LocalInvoice {
+  id: string
+  party_id: string
+  broker_id: string | null
+  invoice_date: string
+  total: number
+  amount_paid: number
+  brokerage_amount: number
+} 
+
 export interface LocalCategory {
   id: string
   name: string
@@ -25,6 +43,8 @@ export interface PendingOp {
 class LocalDB extends Dexie {
   products!: Table<LocalProduct, string>
   categories!: Table<LocalCategory, string>
+  parties!: Table<LocalParty, string>
+  invoices!: Table<LocalInvoice, string>
   pending_ops!: Table<PendingOp, number>
 
   constructor() {
@@ -38,7 +58,22 @@ class LocalDB extends Dexie {
       categories: 'id, name',
       pending_ops: '++id, table, created_at',
     })
+    this.version(3).stores({
+      products: 'id, category_id, name',
+      categories: 'id, name',
+      parties: 'id, name, type',
+      pending_ops: '++id, table, created_at',
+    })
+    this.version(4).stores({
+      products: 'id, category_id, name',
+      categories: 'id, name',
+      parties: 'id, name, type',
+      invoices: 'id, party_id, invoice_date',
+      pending_ops: '++id, table, created_at',
+    })
   }
 }
+
+
 
 export const localDb = new LocalDB()

@@ -1,7 +1,6 @@
-const CACHE_NAME = 'pos-app-cache-v1'
+const CACHE_NAME = 'pos-app-cache-v2'
 const urlsToCache = ['/', '/manifest.json']
 
-// When the service worker installs, pre-cache the core pages
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
@@ -9,7 +8,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
-// Clean up old caches when a new version of the service worker activates
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -21,12 +19,17 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// Intercept every network request
 self.addEventListener('fetch', (event) => {
+  // Only handle actual full-page navigations (typing a URL, reloading the page).
+  // Everything else — API calls, Supabase requests, Next.js internal data
+  // fetches — passes straight through untouched.
+  if (event.request.mode !== 'navigate') {
+    return
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Got a real network response — save a copy for offline use, then return it
         const responseClone = response.clone()
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseClone)
@@ -34,7 +37,6 @@ self.addEventListener('fetch', (event) => {
         return response
       })
       .catch(() => {
-        // Network failed — serve whatever we have cached instead
         return caches.match(event.request).then((cached) => {
           return cached || caches.match('/')
         })

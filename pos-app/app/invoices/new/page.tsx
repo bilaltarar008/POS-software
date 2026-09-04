@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
+import { localDb } from '@/lib/db'
+import { isOnline, queueOp } from '@/lib/sync'
 
 type LineItem = {
   productId: string
@@ -23,29 +26,49 @@ export default function NewInvoicePage() {
   const [amountPaid, setAmountPaid] = useState('0')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savedOffline, setSavedOffline] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: customerData } = await supabase
-        .from('parties')
-        .select('id, name')
-        .eq('type', 'customer')
-        .order('name')
-      setCustomers(customerData || [])
+      // Customers
+      try {
+        const { data, error } = await supabase
+          .from('parties').select('id, name, type').eq('type', 'customer').order('name')
+        if (error) throw error
+        setCustomers(data || [])
+        await localDb.parties.bulkPut(data || [])
+      } catch {
+        const cached = await localDb.parties.where('type').equals('customer').toArray()
+        setCustomers(cached)
+      }
 
-      const { data: brokerData } = await supabase
-        .from('parties')
-        .select('id, name, brokerage_fee_percent')
-        .eq('type', 'broker')
-        .order('name')
-      setBrokers(brokerData || [])
+      // Brokers
+            // Brokers
+      try {
+        const { data, error } = await supabase
+          .from('parties').select('id, name, type, brokerage_fee_percent').eq('type', 'broker').order('name')
+        if (error) throw error
+        setBrokers(data || [])
+        await localDb.parties.bulkPut(data || [])
+      } catch {
+        const cached = await localDb.parties.where('type').equals('broker').toArray()
+        setBrokers(cached as any[])
+      }
 
-      const { data: productData } = await supabase
-        .from('products')
-        .select('id, name, price_per_maund, cost_price_per_maund')
-        .order('name')
-      setProducts(productData || [])
+      // Products
+      try {
+        const { data, error } = await supabase
+          .from('products').select('id, name, price_per_maund, cost_price_per_maund').order('name')
+        if (error) throw error
+        setProducts(data || [])
+        await localDb.products.bulkPut(
+          (data || []).map((p: any) => ({ ...p, category_id: p.category_id || '' }))
+        )
+      } catch {
+        const cached = await localDb.products.toArray()
+        setProducts(cached)
+      }
     }
     fetchData()
   }, [])
@@ -89,28 +112,23 @@ export default function NewInvoicePage() {
     setSaving(true)
     setError('')
 
-    // Step 1: create the invoice
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .insert({
-        party_id: partyId,
-        total: grandTotal,
-        amount_paid: paidNum,
-        broker_id: brokerId || null,
-        brokerage_amount: brokerageAmount,
-      })
-      .select()
-      .single()
+    // Generate every id up front, on this device — this is what makes the
+    // whole bundle work with zero internet. Nothing here needs to wait
+    // for a server response before the next piece can be created.
+    const invoiceId = uuidv4()
 
-    if (invoiceError || !invoice) {
-      setError(invoiceError?.message || 'Failed to create invoice')
-      setSaving(false)
-      return
+    const invoiceRow = {
+      id: invoiceId,
+      party_id: partyId,
+      total: grandTotal,
+      amount_paid: paidNum,
+      broker_id: brokerId || null,
+      brokerage_amount: brokerageAmount,
     }
 
-    // Step 2: create the line items
     const itemRows = items.map((item) => ({
-      invoice_id: invoice.id,
+      id: uuidv4(),
+      invoice_id: invoiceId,
       product_id: item.productId,
       weight_kg: item.weightKg,
       rate_per_maund: item.ratePerMaund,
@@ -118,64 +136,86 @@ export default function NewInvoicePage() {
       cost_per_maund: item.costPerMaund,
     }))
 
-    const { error: itemsError } = await supabase.from('invoice_items').insert(itemRows)
-
-    if (itemsError) {
-      setError(itemsError.message)
-      setSaving(false)
-      return
-    }
-
-    // Step 3: ledger entry for the full sale (customer owes this)
-    const { error: saleLedgerError } = await supabase.from('ledger_entries').insert({
+    const saleLedgerRow = {
+      id: uuidv4(),
       party_id: partyId,
-      invoice_id: invoice.id,
+      invoice_id: invoiceId,
       entry_type: 'sale',
       amount: grandTotal,
-      note: `Invoice #${invoice.id.slice(0, 8)}`,
-    })
+      note: `Invoice #${invoiceId.slice(0, 8)}`,
+    }
 
-    if (saleLedgerError) {
-      setError(saleLedgerError.message)
+    const paymentLedgerRow = paidNum > 0 ? {
+      id: uuidv4(),
+      party_id: partyId,
+      invoice_id: invoiceId,
+      entry_type: 'payment_received',
+      amount: -paidNum,
+      note: `Paid at time of Invoice #${invoiceId.slice(0, 8)}`,
+    } : null
+
+    const brokerLedgerRow = (brokerId && brokerageAmount > 0) ? {
+      id: uuidv4(),
+      party_id: brokerId,
+      invoice_id: invoiceId,
+      entry_type: 'purchase',
+      amount: brokerageAmount,
+      note: `Brokerage for Invoice #${invoiceId.slice(0, 8)}`,
+    } : null
+
+    const online = await isOnline()
+
+    if (online) {
+      const { error: invoiceError } = await supabase.from('invoices').insert(invoiceRow)
+      if (invoiceError) { setError(invoiceError.message); setSaving(false); return }
+
+      const { error: itemsError } = await supabase.from('invoice_items').insert(itemRows)
+      if (itemsError) { setError(itemsError.message); setSaving(false); return }
+
+      const { error: saleError } = await supabase.from('ledger_entries').insert(saleLedgerRow)
+      if (saleError) { setError(saleError.message); setSaving(false); return }
+
+      if (paymentLedgerRow) {
+        const { error: payError } = await supabase.from('ledger_entries').insert(paymentLedgerRow)
+        if (payError) { setError(payError.message); setSaving(false); return }
+      }
+
+      if (brokerLedgerRow) {
+        const { error: brokerError } = await supabase.from('ledger_entries').insert(brokerLedgerRow)
+        if (brokerError) { setError(brokerError.message); setSaving(false); return }
+      }
+
+      router.push(`/invoices/${invoiceId}`)
+    } else {
+      // Offline: save the invoice locally so it's viewable immediately,
+      // and queue every piece to sync later, in the exact order they must
+      // be applied (invoice must exist before items/ledger entries do).
+      await localDb.invoices.put(invoiceRow)
+      await queueOp('invoices', 'insert', invoiceRow)
+
+      for (const item of itemRows) {
+        await queueOp('invoice_items', 'insert', item)
+      }
+
+      await queueOp('ledger_entries', 'insert', saleLedgerRow)
+      if (paymentLedgerRow) await queueOp('ledger_entries', 'insert', paymentLedgerRow)
+      if (brokerLedgerRow) await queueOp('ledger_entries', 'insert', brokerLedgerRow)
+
+      setSavedOffline(true)
       setSaving(false)
-      return
     }
+  }
 
-    // Step 4: payment received now, if any
-    if (paidNum > 0) {
-      const { error: paymentLedgerError } = await supabase.from('ledger_entries').insert({
-        party_id: partyId,
-        invoice_id: invoice.id,
-        entry_type: 'payment_received',
-        amount: -paidNum,
-        note: `Paid at time of Invoice #${invoice.id.slice(0, 8)}`,
-      })
-
-      if (paymentLedgerError) {
-        setError(paymentLedgerError.message)
-        setSaving(false)
-        return
-      }
-    }
-
-    // Step 5: if a broker was used, log what you owe them
-    if (brokerId && brokerageAmount > 0) {
-      const { error: brokerLedgerError } = await supabase.from('ledger_entries').insert({
-        party_id: brokerId,
-        invoice_id: invoice.id,
-        entry_type: 'purchase', // you owe the broker, same direction as owing a supplier
-        amount: brokerageAmount,
-        note: `Brokerage for Invoice #${invoice.id.slice(0, 8)}`,
-      })
-
-      if (brokerLedgerError) {
-        setError(brokerLedgerError.message)
-        setSaving(false)
-        return
-      }
-    }
-
-    router.push(`/invoices/${invoice.id}`)
+  if (savedOffline) {
+    return (
+      <main style={{ padding: '2rem', maxWidth: 400 }}>
+        <h1>Saved Offline</h1>
+        <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
+          No internet connection — this invoice was saved on your device and will sync to the cloud automatically once you're back online.
+        </p>
+        <a href="/">← Back to Products</a>
+      </main>
+    )
   }
 
   return (
@@ -225,7 +265,7 @@ export default function NewInvoicePage() {
             <input
               type="number"
               value={item.weightKg}
-              onChange={(e) => updateItem(index, 'weightKg', parseFloat(e.target.value))}
+              onChange={(e) => updateItem(index, 'weightKg', parseFloat(e.target.value) || 0)}
               placeholder="Weight (kg)"
               required
               style={{ flex: 1, padding: 8 }}
@@ -235,7 +275,7 @@ export default function NewInvoicePage() {
               type="number"
               step="0.01"
               value={item.ratePerMaund}
-              onChange={(e) => updateItem(index, 'ratePerMaund', parseFloat(e.target.value))}
+              onChange={(e) => updateItem(index, 'ratePerMaund', parseFloat(e.target.value) || 0)}
               placeholder="Rate / Maund"
               required
               style={{ flex: 1, padding: 8 }}

@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
+import { localDb } from '@/lib/db'
+import { isOnline, queueOp } from '@/lib/sync'
 
 export default function NewProductPage() {
   const [categories, setCategories] = useState<any[]>([])
@@ -12,13 +15,20 @@ export default function NewProductPage() {
   const [costPrice, setCostPrice] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savedOffline, setSavedOffline] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
+    useEffect(() => {
     const fetchCategories = async () => {
-      const { data, error } = await supabase.from('categories').select('id, name').order('name')
-      if (error) setError(error.message)
-      else setCategories(data || [])
+      try {
+        const { data, error } = await supabase.from('categories').select('id, name').order('name')
+        if (error) throw error
+        setCategories(data || [])
+        await localDb.categories.bulkPut(data || [])
+      } catch {
+        const cached = await localDb.categories.toArray()
+        setCategories(cached)
+      }
     }
     fetchCategories()
   }, [])
@@ -28,19 +38,43 @@ export default function NewProductPage() {
     setSaving(true)
     setError('')
 
-    const { error } = await supabase.from('products').insert({
+    const newProduct = {
+      id: uuidv4(),
       category_id: categoryId,
       name: name,
       price_per_maund: parseFloat(price),
       cost_price_per_maund: parseFloat(costPrice) || 0,
-    })
-
-    if (error) {
-      setError(error.message)
-      setSaving(false)
-    } else {
-      router.push('/')
     }
+
+    const online = await isOnline()
+
+    if (online) {
+      const { error } = await supabase.from('products').insert(newProduct)
+      if (error) {
+        setError(error.message)
+        setSaving(false)
+        return
+      }
+      router.push('/')
+    } else {
+      const category = categories.find((c) => c.id === categoryId)
+      await localDb.products.put({ ...newProduct, category_name: category?.name })
+      await queueOp('products', 'insert', newProduct)
+      setSavedOffline(true)
+      setSaving(false)
+    }
+  }
+
+  if (savedOffline) {
+    return (
+      <main style={{ padding: '2rem', maxWidth: 400 }}>
+        <h1>Saved Offline</h1>
+        <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
+          No internet connection — this product was saved on your device and will sync to the cloud automatically once you're back online.
+        </p>
+        <a href="/">← Back to Products</a>
+      </main>
+    )
   }
 
   return (

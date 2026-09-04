@@ -12,9 +12,9 @@ export default function InvoiceViewPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: invoiceData } = await supabase
+            const { data: invoiceData } = await supabase
         .from('invoices')
-        .select('*, parties(name)')
+        .select('*, parties!invoices_party_id_fkey(name), broker:parties!invoices_broker_id_fkey(name)')
         .eq('id', id)
         .single()
       setInvoice(invoiceData)
@@ -73,6 +73,9 @@ export default function InvoiceViewPage() {
 
       <div style={{ marginTop: 16 }}>
         <p><strong>Grand Total:</strong> Rs. {invoice.total}</p>
+                {invoice.broker_id && (
+          <p><strong>Broker:</strong> {invoice.broker?.name} — Brokerage: Rs. {invoice.brokerage_amount}</p>
+        )}
         <p><strong>Paid:</strong> Rs. {invoice.amount_paid}</p>
         <p style={{ color: balanceDue > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>
           Balance Due: Rs. {balanceDue.toFixed(2)}

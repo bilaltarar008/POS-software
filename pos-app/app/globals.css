@@ -14,9 +14,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --bg-main: #0a0a0a;
+  --text-primary: #9c9bf0;       /* Your base foreground */
+  --text-body: #f4f4fa;          /* Crisp light grey for tiny text */
+  --accent-emerald: #05dfd7;     /* Category A / High performance */
+  --accent-purple: #a370f7;      /* Category B / Medium performance */
+  --muted-grid: #1f1f33;         /* Deep low-contrast container borders */
+}
+
+
+
 }
 
 body {

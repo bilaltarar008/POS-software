@@ -13,8 +13,10 @@ type LineItem = {
 
 export default function NewInvoicePage() {
   const [customers, setCustomers] = useState<any[]>([])
+  const [brokers, setBrokers] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [partyId, setPartyId] = useState('')
+  const [brokerId, setBrokerId] = useState('')
   const [items, setItems] = useState<LineItem[]>([
     { productId: '', weightKg: 40, ratePerMaund: 0, costPerMaund: 0 },
   ])
@@ -31,6 +33,13 @@ export default function NewInvoicePage() {
         .eq('type', 'customer')
         .order('name')
       setCustomers(customerData || [])
+
+      const { data: brokerData } = await supabase
+        .from('parties')
+        .select('id, name, brokerage_fee_percent')
+        .eq('type', 'broker')
+        .order('name')
+      setBrokers(brokerData || [])
 
       const { data: productData } = await supabase
         .from('products')
@@ -70,6 +79,11 @@ export default function NewInvoicePage() {
   const paidNum = parseFloat(amountPaid) || 0
   const creditAmount = grandTotal - paidNum
 
+  const selectedBroker = brokers.find((b) => b.id === brokerId)
+  const brokerageAmount = selectedBroker
+    ? (grandTotal * selectedBroker.brokerage_fee_percent) / 100
+    : 0
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
@@ -78,7 +92,13 @@ export default function NewInvoicePage() {
     // Step 1: create the invoice
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
-      .insert({ party_id: partyId, total: grandTotal, amount_paid: paidNum })
+      .insert({
+        party_id: partyId,
+        total: grandTotal,
+        amount_paid: paidNum,
+        broker_id: brokerId || null,
+        brokerage_amount: brokerageAmount,
+      })
       .select()
       .single()
 
@@ -121,7 +141,7 @@ export default function NewInvoicePage() {
       return
     }
 
-    // Step 4: if they paid something right now, log that as a separate ledger entry
+    // Step 4: payment received now, if any
     if (paidNum > 0) {
       const { error: paymentLedgerError } = await supabase.from('ledger_entries').insert({
         party_id: partyId,
@@ -133,6 +153,23 @@ export default function NewInvoicePage() {
 
       if (paymentLedgerError) {
         setError(paymentLedgerError.message)
+        setSaving(false)
+        return
+      }
+    }
+
+    // Step 5: if a broker was used, log what you owe them
+    if (brokerId && brokerageAmount > 0) {
+      const { error: brokerLedgerError } = await supabase.from('ledger_entries').insert({
+        party_id: brokerId,
+        invoice_id: invoice.id,
+        entry_type: 'purchase', // you owe the broker, same direction as owing a supplier
+        amount: brokerageAmount,
+        note: `Brokerage for Invoice #${invoice.id.slice(0, 8)}`,
+      })
+
+      if (brokerLedgerError) {
+        setError(brokerLedgerError.message)
         setSaving(false)
         return
       }
@@ -155,6 +192,18 @@ export default function NewInvoicePage() {
           <option value="">Select a customer</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <label style={{ display: 'block', marginBottom: 4 }}>Broker (optional)</label>
+        <select
+          value={brokerId}
+          onChange={(e) => setBrokerId(e.target.value)}
+          style={{ display: 'block', marginBottom: 16, width: '100%', padding: 8 }}
+        >
+          <option value="">No broker</option>
+          {brokers.map((b) => (
+            <option key={b.id} value={b.id}>{b.name} ({b.brokerage_fee_percent}%)</option>
           ))}
         </select>
 
@@ -206,6 +255,12 @@ export default function NewInvoicePage() {
 
         <h3>Grand Total: Rs. {grandTotal.toFixed(2)}</h3>
 
+        {selectedBroker && (
+          <p style={{ color: '#d97706' }}>
+            Brokerage ({selectedBroker.brokerage_fee_percent}%): Rs. {brokerageAmount.toFixed(2)}
+          </p>
+        )}
+
         <div style={{ marginTop: 16, padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
           <label style={{ display: 'block', marginBottom: 4 }}>Amount Paid Now</label>
           <input
@@ -224,9 +279,7 @@ export default function NewInvoicePage() {
             </button>
           </div>
           <p style={{ margin: 0, fontWeight: 'bold', color: creditAmount > 0 ? '#dc2626' : '#16a34a' }}>
-            {creditAmount > 0
-              ? `On Credit: Rs. ${creditAmount.toFixed(2)}`
-              : 'Fully Paid'}
+            {creditAmount > 0 ? `On Credit: Rs. ${creditAmount.toFixed(2)}` : 'Fully Paid'}
           </p>
         </div>
 

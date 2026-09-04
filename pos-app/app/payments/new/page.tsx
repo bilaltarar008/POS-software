@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
+import { localDb } from '@/lib/db'
+import { isOnline, queueOp } from '@/lib/sync'
 
 export default function NewPaymentPage() {
   const [parties, setParties] = useState<any[]>([])
@@ -12,12 +15,20 @@ export default function NewPaymentPage() {
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savedOffline, setSavedOffline] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     const fetchParties = async () => {
-      const { data } = await supabase.from('parties').select('id, name, type').order('name')
-      setParties(data || [])
+      try {
+        const { data, error } = await supabase.from('parties').select('id, name, type').order('name')
+        if (error) throw error
+        setParties(data || [])
+        await localDb.parties.bulkPut(data || [])
+      } catch {
+        const cached = await localDb.parties.toArray()
+        setParties(cached)
+      }
     }
     fetchParties()
   }, [])
@@ -28,22 +39,41 @@ export default function NewPaymentPage() {
     setError('')
 
     const amt = parseFloat(amount)
-    // Received = money coming in = reduces what they owe you = negative entry
-    // Made = money going out = reduces what you owe them = negative entry
-    // Both directions reduce a balance, so both are stored negative.
-    const { error } = await supabase.from('ledger_entries').insert({
+    const entry = {
+      id: uuidv4(),
       party_id: partyId,
       entry_type: direction === 'received' ? 'payment_received' : 'payment_made',
       amount: -amt,
       note: note || null,
-    })
-
-    if (error) {
-      setError(error.message)
-      setSaving(false)
-    } else {
-      router.push('/')
     }
+
+    const online = await isOnline()
+
+    if (online) {
+      const { error } = await supabase.from('ledger_entries').insert(entry)
+      if (error) {
+        setError(error.message)
+        setSaving(false)
+        return
+      }
+      router.push('/')
+    } else {
+      await queueOp('ledger_entries', 'insert', entry)
+      setSavedOffline(true)
+      setSaving(false)
+    }
+  }
+
+  if (savedOffline) {
+    return (
+      <main style={{ padding: '2rem', maxWidth: 400 }}>
+        <h1>Saved Offline</h1>
+        <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
+          No internet connection — this payment was saved on your device and will sync to the cloud automatically once you're back online.
+        </p>
+        <a href="/">← Back to Products</a>
+      </main>
+    )
   }
 
   return (

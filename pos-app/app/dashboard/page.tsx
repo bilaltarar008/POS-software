@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 export default function DashboardPage() {
   const [totalSales, setTotalSales] = useState(0)
+  const [totalBrokerage, setTotalBrokerage] = useState(0)
   const [totalCapital, setTotalCapital] = useState(0)
   const [totalProfit, setTotalProfit] = useState(0)
   const [totalReceived, setTotalReceived] = useState(0)
@@ -21,6 +22,11 @@ export default function DashboardPage() {
         .select('amount')
         .eq('entry_type', 'sale')
       setTotalSales((sales || []).reduce((sum, e) => sum + Number(e.amount), 0))
+
+            const { data: brokerageEntries } = await supabase
+        .from('invoices')
+        .select('brokerage_amount')
+      setTotalBrokerage((brokerageEntries || []).reduce((sum, i) => sum + Number(i.brokerage_amount), 0))
 
       const { data: received } = await supabase
         .from('ledger_entries')
@@ -115,6 +121,25 @@ export default function DashboardPage() {
         <div style={{ padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
           <p>Total Received (Cash In)</p>
           <h2>Rs. {totalReceived.toFixed(2)}</h2>
+        </div>
+      </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 16 }}>
+        <div style={{ padding: 16, border: '1px solid #dc2626', borderRadius: 8 }}>
+          <p>Credit Owed to You (by customers)</p>
+          <h2 style={{ color: '#dc2626' }}>Rs. {totalCreditOut.toFixed(2)}</h2>
+        </div>
+        <div style={{ padding: 16, border: '1px solid #d97706', borderRadius: 8 }}>
+          <p>You Owe (to suppliers/brokers)</p>
+          <h2 style={{ color: '#d97706' }}>Rs. {totalCreditIn.toFixed(2)}</h2>
+        </div>
+        <div style={{ padding: 16, border: '1px solid #d97706', borderRadius: 8 }}>
+          <p>Total Brokerage Paid/Owed</p>
+          <h2 style={{ color: '#d97706' }}>Rs. {totalBrokerage.toFixed(2)}</h2>
+        </div>
+        <div style={{ padding: 16, border: `1px solid ${totalProfit >= 0 ? '#16a34a' : '#dc2626'}`, borderRadius: 8 }}>
+          <p>Total Profit / Loss</p>
+          <h2 style={{ color: totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>Rs. {totalProfit.toFixed(2)}</h2>
         </div>
       </div>
 

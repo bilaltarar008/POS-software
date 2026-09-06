@@ -1,5 +1,13 @@
-const CACHE_NAME = 'pos-app-cache-v2'
-const urlsToCache = ['/', '/manifest.json']
+const CACHE_NAME = 'pos-app-cache-v3'
+const urlsToCache = [
+  '/',
+  '/manifest.json',
+  '/products/new',
+  '/invoices/new',
+  '/payments/new',
+  '/capital/new',
+  '/parties',
+  '/dashboard',
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

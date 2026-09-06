@@ -4,6 +4,7 @@ import "./globals.css";
 import Nav from './components/Nav'
 import ServiceWorkerRegister from './components/ServiceWorkerRegister'
 import SyncManager from './components/SyncManager'
+import AuthGuard from './components/AuthGuard'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,7 +34,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <Nav />
+                <AuthGuard>
+
         {children}
+          </AuthGuard>
+
         <SyncManager />
         <ServiceWorkerRegister />
         </body>

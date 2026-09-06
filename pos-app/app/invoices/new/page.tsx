@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
-import { isOnline, queueOp } from '@/lib/sync'
+import { isOnline, queueOp, withTimeout } from '@/lib/sync'
 
 type LineItem = {
   productId: string
@@ -33,8 +33,9 @@ export default function NewInvoicePage() {
     const fetchData = async () => {
       // Customers
       try {
-        const { data, error } = await supabase
-          .from('parties').select('id, name, type').eq('type', 'customer').order('name')
+        const { data, error } = await withTimeout(
+          supabase.from('parties').select('id, name, type').eq('type', 'customer').order('name')
+        )
         if (error) throw error
         setCustomers(data || [])
         await localDb.parties.bulkPut(data || [])
@@ -44,10 +45,10 @@ export default function NewInvoicePage() {
       }
 
       // Brokers
-            // Brokers
       try {
-        const { data, error } = await supabase
-          .from('parties').select('id, name, type, brokerage_fee_percent').eq('type', 'broker').order('name')
+        const { data, error } = await withTimeout(
+          supabase.from('parties').select('id, name, type, brokerage_fee_percent').eq('type', 'broker').order('name')
+        )
         if (error) throw error
         setBrokers(data || [])
         await localDb.parties.bulkPut(data || [])
@@ -58,8 +59,9 @@ export default function NewInvoicePage() {
 
       // Products
       try {
-        const { data, error } = await supabase
-          .from('products').select('id, name, price_per_maund, cost_price_per_maund').order('name')
+        const { data, error } = await withTimeout(
+          supabase.from('products').select('id, name, price_per_maund, cost_price_per_maund').order('name')
+        )
         if (error) throw error
         setProducts(data || [])
         await localDb.products.bulkPut(
@@ -112,9 +114,6 @@ export default function NewInvoicePage() {
     setSaving(true)
     setError('')
 
-    // Generate every id up front, on this device — this is what makes the
-    // whole bundle work with zero internet. Nothing here needs to wait
-    // for a server response before the next piece can be created.
     const invoiceId = uuidv4()
 
     const invoiceRow = {
@@ -187,9 +186,6 @@ export default function NewInvoicePage() {
 
       router.push(`/invoices/${invoiceId}`)
     } else {
-      // Offline: save the invoice locally so it's viewable immediately,
-      // and queue every piece to sync later, in the exact order they must
-      // be applied (invoice must exist before items/ledger entries do).
       await localDb.invoices.put(invoiceRow)
       await queueOp('invoices', 'insert', invoiceRow)
 

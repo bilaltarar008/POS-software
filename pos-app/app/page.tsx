@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
+import { withTimeout } from '@/lib/sync'
 
 export default function Home() {
   const [products, setProducts] = useState<any[]>([])
@@ -13,11 +14,12 @@ export default function Home() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('id, category_id, name, price_per_maund, cost_price_per_maund, categories(name)')
-          .order('name')
-
+        const { data, error } = await withTimeout(
+          supabase
+            .from('products')
+            .select('id, category_id, name, price_per_maund, cost_price_per_maund, categories(name)')
+            .order('name')
+        )
         if (error) throw error
 
         // Success: show the fresh data AND save a local copy for offline use

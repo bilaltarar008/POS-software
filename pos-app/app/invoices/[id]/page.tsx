@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
+import { withTimeout } from '@/lib/sync'
 
 export default function InvoiceViewPage() {
   const { id } = useParams()
@@ -15,17 +16,21 @@ export default function InvoiceViewPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data: invoiceData, error: invoiceError } = await supabase
-          .from('invoices')
-          .select('*, parties!invoices_party_id_fkey(name), broker:parties!invoices_broker_id_fkey(name)')
-          .eq('id', id)
-          .single()
+        const { data: invoiceData, error: invoiceError } = await withTimeout(
+          supabase
+            .from('invoices')
+            .select('*, parties!invoices_party_id_fkey(name), broker:parties!invoices_broker_id_fkey(name)')
+            .eq('id', id)
+            .single()
+        )
         if (invoiceError) throw invoiceError
 
-        const { data: itemData, error: itemsError } = await supabase
-          .from('invoice_items')
-          .select('*, products(name)')
-          .eq('invoice_id', id)
+        const { data: itemData, error: itemsError } = await withTimeout(
+          supabase
+            .from('invoice_items')
+            .select('*, products(name)')
+            .eq('invoice_id', id)
+        )
         if (itemsError) throw itemsError
 
         setInvoice(invoiceData)

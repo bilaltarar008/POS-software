@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
-import { isOnline, queueOp } from '@/lib/sync'
+import { isOnline, queueOp, withTimeout } from '@/lib/sync'
 
 export default function NewPaymentPage() {
   const [parties, setParties] = useState<any[]>([])
@@ -21,7 +21,9 @@ export default function NewPaymentPage() {
   useEffect(() => {
     const fetchParties = async () => {
       try {
-        const { data, error } = await supabase.from('parties').select('id, name, type').order('name')
+        const { data, error } = await withTimeout(
+          supabase.from('parties').select('id, name, type').order('name')
+        )
         if (error) throw error
         setParties(data || [])
         await localDb.parties.bulkPut(data || [])

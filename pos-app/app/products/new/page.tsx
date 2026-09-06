@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
 import { isOnline, queueOp } from '@/lib/sync'
+import { withTimeout } from '@/lib/sync'
 
 export default function NewProductPage() {
   const [categories, setCategories] = useState<any[]>([])
@@ -19,9 +20,11 @@ export default function NewProductPage() {
   const router = useRouter()
 
     useEffect(() => {
-    const fetchCategories = async () => {
+        const fetchCategories = async () => {
       try {
-        const { data, error } = await supabase.from('categories').select('id, name').order('name')
+        const { data, error } = await withTimeout(
+          supabase.from('categories').select('id, name').order('name')
+        )
         if (error) throw error
         setCategories(data || [])
         await localDb.categories.bulkPut(data || [])
@@ -37,6 +40,8 @@ export default function NewProductPage() {
     e.preventDefault()
     setSaving(true)
     setError('')
+
+  
 
     const newProduct = {
       id: uuidv4(),

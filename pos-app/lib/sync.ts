@@ -4,8 +4,9 @@ import { localDb } from './db'
 export async function isOnline(): Promise<boolean> {
   if (!navigator.onLine) return false
   try {
-    // A lightweight real check — navigator.onLine can lie (e.g. connected to wifi with no internet)
-    const { error } = await supabase.from('categories').select('id').limit(1)
+    const { error } = await withTimeout(
+      supabase.from('categories').select('id').limit(1)
+    )
     return !error
   } catch {
     return false
@@ -21,6 +22,22 @@ export async function queueOp(table: string, operation: 'insert' | 'update', pay
   })
 }
 
+export async function withTimeout<T>(promise: Promise<T>, ms = 3000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Request timed out')), ms)
+    promise.then(
+      (result) => {
+        clearTimeout(timer)
+        resolve(result)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      }
+    )
+  })
+}
+
 export async function flushPendingOps(): Promise<{ synced: number; failed: number }> {
   const ops = await localDb.pending_ops.orderBy('created_at').toArray()
   let synced = 0
@@ -29,7 +46,7 @@ export async function flushPendingOps(): Promise<{ synced: number; failed: numbe
   for (const op of ops) {
     try {
       if (op.operation === 'insert') {
-        const { error } = await supabase.from(op.table).insert(op.payload)
+        const { error } = await supabase.from(op.table).upsert(op.payload)
         if (error) throw error
       } else if (op.operation === 'update') {
         const { id, ...fields } = op.payload

@@ -2,88 +2,80 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { localDb } from '@/lib/db'
+import { withTimeout } from '@/lib/sync'
 
 export default function DashboardPage() {
   const [totalSales, setTotalSales] = useState(0)
-  const [totalBrokerage, setTotalBrokerage] = useState(0)
   const [totalCapital, setTotalCapital] = useState(0)
   const [totalProfit, setTotalProfit] = useState(0)
   const [totalReceived, setTotalReceived] = useState(0)
-  const [totalCreditOut, setTotalCreditOut] = useState(0) // customers owe you
-  const [totalCreditIn, setTotalCreditIn] = useState(0) // you owe suppliers
+  const [totalCreditOut, setTotalCreditOut] = useState(0)
+  const [totalCreditIn, setTotalCreditIn] = useState(0)
+  const [totalBrokerage, setTotalBrokerage] = useState(0)
   const [partyBalances, setPartyBalances] = useState<any[]>([])
   const [productStats, setProductStats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [offline, setOffline] = useState(false)
 
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: sales } = await supabase
-        .from('ledger_entries')
-        .select('amount')
-        .eq('entry_type', 'sale')
-      setTotalSales((sales || []).reduce((sum, e) => sum + Number(e.amount), 0))
+    const computeEverything = (
+      parties: any[],
+      entries: any[],
+      capital: any[],
+      invoices: any[],
+      items: any[]
+    ) => {
+      setTotalSales(
+        entries.filter((e) => e.entry_type === 'sale').reduce((sum, e) => sum + Number(e.amount), 0)
+      )
 
-            const { data: brokerageEntries } = await supabase
-        .from('invoices')
-        .select('brokerage_amount')
-      setTotalBrokerage((brokerageEntries || []).reduce((sum, i) => sum + Number(i.brokerage_amount), 0))
+      setTotalReceived(
+        Math.abs(
+          entries
+            .filter((e) => e.entry_type === 'payment_received')
+            .reduce((sum, e) => sum + Number(e.amount), 0)
+        )
+      )
 
-      const { data: received } = await supabase
-        .from('ledger_entries')
-        .select('amount')
-        .eq('entry_type', 'payment_received')
-      setTotalReceived(Math.abs((received || []).reduce((sum, e) => sum + Number(e.amount), 0)))
+      setTotalCapital(capital.reduce((sum, e) => sum + Number(e.amount), 0))
 
-      const { data: capital } = await supabase.from('capital_entries').select('amount')
-      setTotalCapital((capital || []).reduce((sum, e) => sum + Number(e.amount), 0))
-
-      // --- Party balances (who owes you, who you owe) ---
-      const { data: parties } = await supabase.from('parties').select('id, name, type')
-      const { data: entries } = await supabase.from('ledger_entries').select('party_id, amount')
+      setTotalBrokerage(invoices.reduce((sum, i) => sum + Number(i.brokerage_amount || 0), 0))
 
       const balanceMap: Record<string, number> = {}
-      entries?.forEach((e) => {
+      entries.forEach((e) => {
         balanceMap[e.party_id] = (balanceMap[e.party_id] || 0) + Number(e.amount)
       })
 
-      const balances = (parties || [])
+      const balances = parties
         .map((p) => ({ ...p, balance: balanceMap[p.id] || 0 }))
-        .filter((p) => Math.abs(p.balance) > 0.01) // only show non-zero balances
+        .filter((p) => Math.abs(p.balance) > 0.01)
         .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
 
       setPartyBalances(balances)
 
-      const creditOut = balances
-        .filter((p) => p.type === 'customer' && p.balance > 0)
-        .reduce((sum, p) => sum + p.balance, 0)
-      setTotalCreditOut(creditOut)
+      setTotalCreditOut(
+        balances.filter((p) => p.type === 'customer' && p.balance > 0).reduce((sum, p) => sum + p.balance, 0)
+      )
+      setTotalCreditIn(
+        balances
+          .filter((p) => (p.type === 'supplier' || p.type === 'broker') && p.balance > 0)
+          .reduce((sum, p) => sum + p.balance, 0)
+      )
 
-      const creditIn = balances
-        .filter((p) => p.type === 'supplier' && p.balance > 0)
-        .reduce((sum, p) => sum + p.balance, 0)
-      setTotalCreditIn(creditIn)
-
-      // --- Product-level sales & profit ---
-      const { data: soldItems } = await supabase
-        .from('invoice_items')
-        .select('weight_kg, rate_per_maund, cost_per_maund, product_id, products(name)')
-
-      const profit = (soldItems || []).reduce((sum, item) => {
-        const maunds = item.weight_kg / 40
-        return sum + (maunds * item.rate_per_maund - maunds * item.cost_per_maund)
-      }, 0)
-      setTotalProfit(profit)
-
+      let profit = 0
       const productMap: Record<string, any> = {}
-      ;(soldItems || []).forEach((item: any) => {
+
+      items.forEach((item: any) => {
         const maunds = item.weight_kg / 40
         const revenue = maunds * item.rate_per_maund
         const cost = maunds * item.cost_per_maund
-        const key = item.product_id
+        profit += revenue - cost
 
+        const key = item.product_id
         if (!productMap[key]) {
           productMap[key] = {
-            name: item.products?.name || 'Unknown',
+            name: item.product_name || item.products?.name || 'Unknown',
             totalWeightKg: 0,
             revenue: 0,
             profit: 0,
@@ -94,11 +86,70 @@ export default function DashboardPage() {
         productMap[key].profit += revenue - cost
       })
 
-      const productList = Object.values(productMap).sort((a: any, b: any) => b.revenue - a.revenue)
-      setProductStats(productList)
+      setTotalProfit(profit)
+      setProductStats(Object.values(productMap).sort((a: any, b: any) => b.revenue - a.revenue))
+    }
 
+    const fetchData = async () => {
+      try {
+        const { data: parties, error: e1 } = await withTimeout(
+          supabase.from('parties').select('id, name, type')
+        )
+        if (e1) throw e1
+
+        const { data: entries, error: e2 } = await withTimeout(
+          supabase.from('ledger_entries').select('*')
+        )
+        if (e2) throw e2
+
+        const { data: capital, error: e3 } = await withTimeout(
+          supabase.from('capital_entries').select('*')
+        )
+        if (e3) throw e3
+
+        const { data: invoices, error: e4 } = await withTimeout(
+          supabase.from('invoices').select('brokerage_amount')
+        )
+        if (e4) throw e4
+
+        const { data: items, error: e5 } = await withTimeout(
+          supabase.from('invoice_items').select('*, products(name)')
+        )
+        if (e5) throw e5
+
+        setOffline(false)
+
+        // Cache everything for offline use
+        await localDb.parties.bulkPut(parties || [])
+        await localDb.ledger_entries.bulkPut(entries || [])
+        await localDb.capital_entries.bulkPut(capital || [])
+        await localDb.invoice_items.bulkPut(
+          (items || []).map((item: any) => ({
+            id: item.id,
+            invoice_id: item.invoice_id,
+            product_id: item.product_id,
+            weight_kg: item.weight_kg,
+            rate_per_maund: item.rate_per_maund,
+            line_total: item.line_total,
+            cost_per_maund: item.cost_per_maund,
+            product_name: item.products?.name,
+          }))
+        )
+
+        computeEverything(parties || [], entries || [], capital || [], invoices || [], items || [])
+      } catch {
+        setOffline(true)
+        const parties = await localDb.parties.toArray()
+        const entries = await localDb.ledger_entries.toArray()
+        const capital = await localDb.capital_entries.toArray()
+        const items = await localDb.invoice_items.toArray()
+        const invoices = await localDb.invoices.toArray()
+
+        computeEverything(parties, entries, capital, invoices, items)
+      }
       setLoading(false)
     }
+
     fetchData()
   }, [])
 
@@ -106,9 +157,13 @@ export default function DashboardPage() {
 
   return (
     <main style={{ padding: '2rem' }}>
+      {offline && (
+        <p style={{ background: '#fef3c7', padding: 8, borderRadius: 4, marginBottom: 16 }}>
+          ⚠️ You're offline. Showing last saved data.
+        </p>
+      )}
       <h1>Dashboard</h1>
 
-      {/* Top summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 16 }}>
         <div style={{ padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
           <p>Capital Entered</p>
@@ -124,7 +179,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 16 }}>
         <div style={{ padding: 16, border: '1px solid #dc2626', borderRadius: 8 }}>
           <p>Credit Owed to You (by customers)</p>
           <h2 style={{ color: '#dc2626' }}>Rs. {totalCreditOut.toFixed(2)}</h2>
@@ -143,23 +198,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Credit + profit cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 16 }}>
-        <div style={{ padding: 16, border: '1px solid #dc2626', borderRadius: 8 }}>
-          <p>Credit Owed to You (by customers)</p>
-          <h2 style={{ color: '#dc2626' }}>Rs. {totalCreditOut.toFixed(2)}</h2>
-        </div>
-        <div style={{ padding: 16, border: '1px solid #d97706', borderRadius: 8 }}>
-          <p>You Owe (to suppliers)</p>
-          <h2 style={{ color: '#d97706' }}>Rs. {totalCreditIn.toFixed(2)}</h2>
-        </div>
-        <div style={{ padding: 16, border: `1px solid ${totalProfit >= 0 ? '#16a34a' : '#dc2626'}`, borderRadius: 8 }}>
-          <p>Total Profit / Loss</p>
-          <h2 style={{ color: totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>Rs. {totalProfit.toFixed(2)}</h2>
-        </div>
-      </div>
-
-      {/* Party-by-party breakdown */}
       <h2 style={{ marginTop: 32 }}>Who Owes What</h2>
       {partyBalances.length === 0 && <p>No outstanding balances.</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
@@ -189,7 +227,6 @@ export default function DashboardPage() {
         </tbody>
       </table>
 
-      {/* Product-by-product breakdown */}
       <h2 style={{ marginTop: 32 }}>Sales by Product</h2>
       {productStats.length === 0 && <p>No sales yet.</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>

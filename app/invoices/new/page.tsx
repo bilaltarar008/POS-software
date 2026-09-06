@@ -116,13 +116,14 @@ export default function NewInvoicePage() {
 
     const invoiceId = uuidv4()
 
-    const invoiceRow = {
+      const invoiceRow = {
       id: invoiceId,
       party_id: partyId,
       total: grandTotal,
       amount_paid: paidNum,
       broker_id: brokerId || null,
       brokerage_amount: brokerageAmount,
+      invoice_date: new Date().toISOString().split('T')[0], // e.g. "2026-09-06"
     }
 
     const itemRows = items.map((item) => ({

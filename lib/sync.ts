@@ -22,10 +22,13 @@ export async function queueOp(table: string, operation: 'insert' | 'update', pay
   })
 }
 
-export async function withTimeout<T>(promise: Promise<T>, ms = 3000): Promise<T> {
+export async function withTimeout<T>(
+  promiseLike: PromiseLike<T>,
+  ms = 3000
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Request timed out')), ms)
-    promise.then(
+    Promise.resolve(promiseLike).then(
       (result) => {
         clearTimeout(timer)
         resolve(result)

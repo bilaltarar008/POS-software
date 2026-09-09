@@ -9,26 +9,20 @@ type RangeOption = 'all' | 'this_month' | 'last_month' | 'this_year' | 'custom'
 
 function getRangeDates(range: RangeOption, customStart: string, customEnd: string): { start: string | null; end: string | null } {
   const now = new Date()
-
   if (range === 'all') return { start: null, end: null }
-
   if (range === 'this_month') {
     const start = new Date(now.getFullYear(), now.getMonth(), 1)
     return { start: start.toISOString().split('T')[0], end: null }
   }
-
   if (range === 'last_month') {
     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const end = new Date(now.getFullYear(), now.getMonth(), 0)
     return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] }
   }
-
   if (range === 'this_year') {
     const start = new Date(now.getFullYear(), 0, 1)
     return { start: start.toISOString().split('T')[0], end: null }
   }
-
-  // custom
   return { start: customStart || null, end: customEnd || null }
 }
 
@@ -55,33 +49,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(false)
 
-  // Fetch everything once, unfiltered — filtering happens client-side afterward
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data: parties, error: e1 } = await withTimeout(
-          supabase.from('parties').select('id, name, type')
-        )
+        const { data: parties, error: e1 } = await withTimeout(supabase.from('parties').select('id, name, type'))
         if (e1) throw e1
-
-        const { data: entries, error: e2 } = await withTimeout(
-          supabase.from('ledger_entries').select('*')
-        )
+        const { data: entries, error: e2 } = await withTimeout(supabase.from('ledger_entries').select('*'))
         if (e2) throw e2
-
-        const { data: capital, error: e3 } = await withTimeout(
-          supabase.from('capital_entries').select('*')
-        )
+        const { data: capital, error: e3 } = await withTimeout(supabase.from('capital_entries').select('*'))
         if (e3) throw e3
-
-        const { data: invoices, error: e4 } = await withTimeout(
-          supabase.from('invoices').select('id, brokerage_amount, invoice_date')
-        )
+        const { data: invoices, error: e4 } = await withTimeout(supabase.from('invoices').select('id, brokerage_amount, invoice_date'))
         if (e4) throw e4
-
-        const { data: items, error: e5 } = await withTimeout(
-          supabase.from('invoice_items').select('*, products(name), invoices(invoice_date)')
-        )
+        const { data: items, error: e5 } = await withTimeout(supabase.from('invoice_items').select('*, products(name), invoices(invoice_date)'))
         if (e5) throw e5
 
         setOffline(false)
@@ -91,24 +70,15 @@ export default function DashboardPage() {
         await localDb.capital_entries.bulkPut(capital || [])
         await localDb.invoices.bulkPut(
           (invoices || []).map((inv: any) => ({
-            id: inv.id,
-            party_id: '',
-            broker_id: null,
-            invoice_date: inv.invoice_date,
-            total: 0,
-            amount_paid: 0,
-            brokerage_amount: inv.brokerage_amount,
+            id: inv.id, party_id: '', broker_id: null, invoice_date: inv.invoice_date,
+            total: 0, amount_paid: 0, brokerage_amount: inv.brokerage_amount,
           }))
         )
         await localDb.invoice_items.bulkPut(
           (items || []).map((item: any) => ({
-            id: item.id,
-            invoice_id: item.invoice_id,
-            product_id: item.product_id,
-            weight_kg: item.weight_kg,
-            rate_per_maund: item.rate_per_maund,
-            line_total: item.line_total,
-            cost_per_maund: item.cost_per_maund,
+            id: item.id, invoice_id: item.invoice_id, product_id: item.product_id,
+            weight_kg: item.weight_kg, rate_per_maund: item.rate_per_maund,
+            line_total: item.line_total, cost_per_maund: item.cost_per_maund,
             product_name: item.products?.name,
           }))
         )
@@ -117,13 +87,7 @@ export default function DashboardPage() {
         setAllEntries((entries || []).map((e: any) => ({ ...e, date: e.created_at?.split('T')[0] })))
         setAllCapital((capital || []).map((c: any) => ({ ...c, date: c.entry_date })))
         setAllInvoices(invoices || [])
-        setAllItems(
-          (items || []).map((item: any) => ({
-            ...item,
-            product_name: item.products?.name,
-            invoice_date: item.invoices?.invoice_date,
-          }))
-        )
+        setAllItems((items || []).map((item: any) => ({ ...item, product_name: item.products?.name, invoice_date: item.invoices?.invoice_date })))
       } catch {
         setOffline(true)
         const parties = await localDb.parties.toArray()
@@ -133,25 +97,21 @@ export default function DashboardPage() {
         const items = await localDb.invoice_items.toArray()
 
         setAllParties(parties)
-        setAllEntries(entries.map((e: any) => ({ ...e, date: null }))) // offline: no created_at cached, so date-filtering won't apply
+        setAllEntries(entries.map((e: any) => ({ ...e, date: null })))
         setAllCapital(capital.map((c: any) => ({ ...c, date: c.entry_date })))
         setAllInvoices(invoices)
         setAllItems(items.map((item: any) => ({ ...item, invoice_date: null })))
       }
       setLoading(false)
     }
-
     fetchData()
   }, [])
 
-  // Recompute whenever the range or raw data changes
   useEffect(() => {
     if (loading) return
-
     const { start, end } = getRangeDates(range, customStart, customEnd)
-
     const inRange = (dateStr: string | null | undefined) => {
-      if (!dateStr) return range === 'all' // if we have no date (offline fallback), only include under "All time"
+      if (!dateStr) return range === 'all'
       if (start && dateStr < start) return false
       if (end && dateStr > end) return false
       return true
@@ -162,34 +122,20 @@ export default function DashboardPage() {
     const invoices = allInvoices.filter((i) => inRange(i.invoice_date))
     const items = allItems.filter((i) => inRange(i.invoice_date))
 
-    setTotalSales(
-      entries.filter((e) => e.entry_type === 'sale').reduce((sum, e) => sum + Number(e.amount), 0)
-    )
-    setTotalReceived(
-      Math.abs(
-        entries.filter((e) => e.entry_type === 'payment_received').reduce((sum, e) => sum + Number(e.amount), 0)
-      )
-    )
+    setTotalSales(entries.filter((e) => e.entry_type === 'sale').reduce((sum, e) => sum + Number(e.amount), 0))
+    setTotalReceived(Math.abs(entries.filter((e) => e.entry_type === 'payment_received').reduce((sum, e) => sum + Number(e.amount), 0)))
     setTotalCapital(capital.reduce((sum, e) => sum + Number(e.amount), 0))
     setTotalBrokerage(invoices.reduce((sum, i) => sum + Number(i.brokerage_amount || 0), 0))
 
-    // Party balances always reflect all-time totals — a balance owed doesn't
-    // reset each month, so this table intentionally ignores the date filter.
     const balanceMap: Record<string, number> = {}
-    allEntries.forEach((e) => {
-      balanceMap[e.party_id] = (balanceMap[e.party_id] || 0) + Number(e.amount)
-    })
+    allEntries.forEach((e) => { balanceMap[e.party_id] = (balanceMap[e.party_id] || 0) + Number(e.amount) })
     const balances = allParties
       .map((p) => ({ ...p, balance: balanceMap[p.id] || 0 }))
       .filter((p) => Math.abs(p.balance) > 0.01)
       .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
     setPartyBalances(balances)
-    setTotalCreditOut(
-      balances.filter((p) => p.type === 'customer' && p.balance > 0).reduce((sum, p) => sum + p.balance, 0)
-    )
-    setTotalCreditIn(
-      balances.filter((p) => (p.type === 'supplier' || p.type === 'broker') && p.balance > 0).reduce((sum, p) => sum + p.balance, 0)
-    )
+    setTotalCreditOut(balances.filter((p) => p.type === 'customer' && p.balance > 0).reduce((sum, p) => sum + p.balance, 0))
+    setTotalCreditIn(balances.filter((p) => (p.type === 'supplier' || p.type === 'broker') && p.balance > 0).reduce((sum, p) => sum + p.balance, 0))
 
     let profit = 0
     const productMap: Record<string, any> = {}
@@ -198,11 +144,8 @@ export default function DashboardPage() {
       const revenue = maunds * item.rate_per_maund
       const cost = maunds * item.cost_per_maund
       profit += revenue - cost
-
       const key = item.product_id
-      if (!productMap[key]) {
-        productMap[key] = { name: item.product_name || 'Unknown', totalWeightKg: 0, revenue: 0, profit: 0 }
-      }
+      if (!productMap[key]) productMap[key] = { name: item.product_name || 'Unknown', totalWeightKg: 0, revenue: 0, profit: 0 }
       productMap[key].totalWeightKg += Number(item.weight_kg)
       productMap[key].revenue += revenue
       productMap[key].profit += revenue - cost
@@ -211,20 +154,20 @@ export default function DashboardPage() {
     setProductStats(Object.values(productMap).sort((a: any, b: any) => b.revenue - a.revenue))
   }, [range, customStart, customEnd, loading, allEntries, allCapital, allInvoices, allItems, allParties])
 
-  if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
+  if (loading) return <main className="page-container">Loading...</main>
 
   return (
-    <main style={{ padding: '2rem' }}>
+    <main className="page-container">
       {offline && (
-        <p style={{ background: '#fef3c7', padding: 8, borderRadius: 4, marginBottom: 16 }}>
+        <p className="bg-amber-100 text-amber-800 p-2 rounded mb-4 text-sm">
           ⚠️ You're offline. Showing last saved data. Date filtering may be limited until you're back online.
         </p>
       )}
-      <h1>Dashboard</h1>
+      <h1 className="text-2xl font-bold">Dashboard</h1>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
-        <label>Show:</label>
-        <select value={range} onChange={(e) => setRange(e.target.value as RangeOption)} style={{ padding: 8 }}>
+      <div className="flex flex-wrap gap-2 items-center mt-4">
+        <label className="text-sm font-medium">Show:</label>
+        <select value={range} onChange={(e) => setRange(e.target.value as RangeOption)} className="input-field w-auto">
           <option value="this_month">This Month</option>
           <option value="last_month">Last Month</option>
           <option value="this_year">This Year</option>
@@ -233,100 +176,64 @@ export default function DashboardPage() {
         </select>
         {range === 'custom' && (
           <>
-            <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} style={{ padding: 8 }} />
+            <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="input-field w-auto" />
             <span>to</span>
-            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} style={{ padding: 8 }} />
+            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="input-field w-auto" />
           </>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 16 }}>
-        <div style={{ padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
-          <p>Capital Entered</p>
-          <h2>Rs. {totalCapital.toFixed(2)}</h2>
-        </div>
-        <div style={{ padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
-          <p>Total Sales (Invoiced)</p>
-          <h2>Rs. {totalSales.toFixed(2)}</h2>
-        </div>
-        <div style={{ padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
-          <p>Total Received (Cash In)</p>
-          <h2>Rs. {totalReceived.toFixed(2)}</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+        <div className="card"><p className="text-sm text-gray-600">Capital Entered</p><h2 className="text-xl font-bold">Rs. {totalCapital.toFixed(2)}</h2></div>
+        <div className="card"><p className="text-sm text-gray-600">Total Sales (Invoiced)</p><h2 className="text-xl font-bold">Rs. {totalSales.toFixed(2)}</h2></div>
+        <div className="card"><p className="text-sm text-gray-600">Total Received (Cash In)</p><h2 className="text-xl font-bold">Rs. {totalReceived.toFixed(2)}</h2></div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        <div className="card border-red-300"><p className="text-sm text-gray-600">Credit Owed to You (all time)</p><h2 className="text-xl font-bold text-red-600">Rs. {totalCreditOut.toFixed(2)}</h2></div>
+        <div className="card border-amber-300"><p className="text-sm text-gray-600">You Owe (all time)</p><h2 className="text-xl font-bold text-amber-700">Rs. {totalCreditIn.toFixed(2)}</h2></div>
+        <div className="card border-amber-300"><p className="text-sm text-gray-600">Brokerage (selected range)</p><h2 className="text-xl font-bold text-amber-700">Rs. {totalBrokerage.toFixed(2)}</h2></div>
+        <div className={`card ${totalProfit >= 0 ? 'border-green-300' : 'border-red-300'}`}>
+          <p className="text-sm text-gray-600">Profit / Loss (selected range)</p>
+          <h2 className={`text-xl font-bold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>Rs. {totalProfit.toFixed(2)}</h2>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 16 }}>
-        <div style={{ padding: 16, border: '1px solid #dc2626', borderRadius: 8 }}>
-          <p>Credit Owed to You (all time)</p>
-          <h2 style={{ color: '#dc2626' }}>Rs. {totalCreditOut.toFixed(2)}</h2>
-        </div>
-        <div style={{ padding: 16, border: '1px solid #d97706', borderRadius: 8 }}>
-          <p>You Owe (all time)</p>
-          <h2 style={{ color: '#d97706' }}>Rs. {totalCreditIn.toFixed(2)}</h2>
-        </div>
-        <div style={{ padding: 16, border: '1px solid #d97706', borderRadius: 8 }}>
-          <p>Brokerage (selected range)</p>
-          <h2 style={{ color: '#d97706' }}>Rs. {totalBrokerage.toFixed(2)}</h2>
-        </div>
-        <div style={{ padding: 16, border: `1px solid ${totalProfit >= 0 ? '#16a34a' : '#dc2626'}`, borderRadius: 8 }}>
-          <p>Profit / Loss (selected range)</p>
-          <h2 style={{ color: totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>Rs. {totalProfit.toFixed(2)}</h2>
-        </div>
+      <h2 className="text-lg font-semibold mt-8">Who Owes What (all time)</h2>
+      {partyBalances.length === 0 && <p className="text-gray-600">No outstanding balances.</p>}
+      <div className="overflow-x-auto mt-2">
+        <table className="table-base">
+          <thead><tr><th>Party</th><th>Type</th><th>Balance</th><th>Meaning</th></tr></thead>
+          <tbody>
+            {partyBalances.map((p) => (
+              <tr key={p.id}>
+                <td>{p.name}</td>
+                <td className="capitalize">{p.type}</td>
+                <td className={`font-bold ${p.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>Rs. {Math.abs(p.balance).toFixed(2)}</td>
+                <td>{p.type === 'customer' ? (p.balance > 0 ? 'Owes you' : 'They overpaid / credit balance') : (p.balance > 0 ? 'You owe them' : 'You overpaid / credit balance')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      <h2 style={{ marginTop: 32 }}>Who Owes What (all time)</h2>
-      {partyBalances.length === 0 && <p>No outstanding balances.</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #ccc' }}>
-            <th>Party</th>
-            <th>Type</th>
-            <th>Balance</th>
-            <th>Meaning</th>
-          </tr>
-        </thead>
-        <tbody>
-          {partyBalances.map((p) => (
-            <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td>{p.name}</td>
-              <td style={{ textTransform: 'capitalize' }}>{p.type}</td>
-              <td style={{ color: p.balance > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>
-                Rs. {Math.abs(p.balance).toFixed(2)}
-              </td>
-              <td>
-                {p.type === 'customer'
-                  ? p.balance > 0 ? 'Owes you' : 'They overpaid / credit balance'
-                  : p.balance > 0 ? 'You owe them' : 'You overpaid / credit balance'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <h2 style={{ marginTop: 32 }}>Sales by Product (selected range)</h2>
-      {productStats.length === 0 && <p>No sales in this range.</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #ccc' }}>
-            <th>Product</th>
-            <th>Total Weight Sold</th>
-            <th>Revenue</th>
-            <th>Profit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {productStats.map((p: any, i: number) => (
-            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-              <td>{p.name}</td>
-              <td>{p.totalWeightKg} kg ({(p.totalWeightKg / 40).toFixed(2)} maund)</td>
-              <td>Rs. {p.revenue.toFixed(2)}</td>
-              <td style={{ color: p.profit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 'bold' }}>
-                Rs. {p.profit.toFixed(2)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <h2 className="text-lg font-semibold mt-8">Sales by Product (selected range)</h2>
+      {productStats.length === 0 && <p className="text-gray-600">No sales in this range.</p>}
+      <div className="overflow-x-auto mt-2">
+        <table className="table-base">
+          <thead><tr><th>Product</th><th>Total Weight Sold</th><th>Revenue</th><th>Profit</th></tr></thead>
+          <tbody>
+            {productStats.map((p: any, i: number) => (
+              <tr key={i}>
+                <td>{p.name}</td>
+                <td>{p.totalWeightKg} kg ({(p.totalWeightKg / 40).toFixed(2)} maund)</td>
+                <td>Rs. {p.revenue.toFixed(2)}</td>
+                <td className={`font-bold ${p.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>Rs. {p.profit.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </main>
   )
 }

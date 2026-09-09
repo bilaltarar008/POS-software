@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
-import { useSyncStatus } from '@/lib/useSyncStatus'
 import { localDb } from '@/lib/db'
 import { isOnline, queueOp, withTimeout } from '@/lib/sync'
+import { useSyncStatus } from '@/lib/useSyncStatus'
 
 export default function NewPaymentPage() {
   const [parties, setParties] = useState<any[]>([])
@@ -15,10 +15,10 @@ export default function NewPaymentPage() {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
-  const pendingCount = useSyncStatus()
   const [saving, setSaving] = useState(false)
   const [savedOffline, setSavedOffline] = useState(false)
   const router = useRouter()
+  const pendingCount = useSyncStatus()
 
   useEffect(() => {
     const fetchParties = async () => {
@@ -68,35 +68,35 @@ export default function NewPaymentPage() {
     }
   }
 
-    if (savedOffline) {
+  if (savedOffline) {
     return (
-      <main style={{ padding: '2rem', maxWidth: 400 }}>
-        <h1>Saved Offline</h1>
+      <main className="page-container max-w-sm">
+        <h1 className="text-2xl font-bold mb-4">Saved Offline</h1>
         {pendingCount !== null && pendingCount > 0 && (
-          <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
-            No internet connection — this product was saved on your device and will sync to the cloud automatically once you're back online.
+          <p className="bg-amber-100 text-amber-800 p-3 rounded mb-3">
+            No internet connection — this payment was saved on your device and will sync to the cloud automatically once you're back online.
           </p>
         )}
         {pendingCount === 0 && (
-          <p style={{ background: '#dcfce7', padding: 12, borderRadius: 4 }}>
-            ✅ Synced! This product has been saved to the cloud.
+          <p className="bg-green-100 text-green-800 p-3 rounded mb-3">
+            ✅ Synced! This payment has been saved to the cloud.
           </p>
         )}
-        <a href="/">← Back to Products</a>
+        <a href="/" className="text-blue-600 hover:underline">← Back to Products</a>
       </main>
     )
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 400 }}>
-      <h1>Record Payment</h1>
+    <main className="page-container max-w-sm">
+      <h1 className="text-2xl font-bold mb-4">Record Payment</h1>
       <form onSubmit={handleSubmit}>
-        <label style={{ display: 'block', marginBottom: 4 }}>Party</label>
+        <label className="label-text">Party</label>
         <select
           value={partyId}
           onChange={(e) => setPartyId(e.target.value)}
           required
-          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         >
           <option value="">Select a party</option>
           {parties.map((p) => (
@@ -104,37 +104,37 @@ export default function NewPaymentPage() {
           ))}
         </select>
 
-        <label style={{ display: 'block', marginBottom: 4 }}>Direction</label>
+        <label className="label-text">Direction</label>
         <select
           value={direction}
           onChange={(e) => setDirection(e.target.value as 'received' | 'made')}
-          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         >
           <option value="received">Payment Received (they paid you)</option>
           <option value="made">Payment Made (you paid them)</option>
         </select>
 
-        <label style={{ display: 'block', marginBottom: 4 }}>Amount</label>
+        <label className="label-text">Amount</label>
         <input
           type="number"
           step="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           required
-          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         />
 
-        <label style={{ display: 'block', marginBottom: 4 }}>Note (optional)</label>
+        <label className="label-text">Note (optional)</label>
         <input
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         />
 
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {error && <p className="text-red-600 mb-3">{error}</p>}
 
-        <button type="submit" disabled={saving} style={{ padding: '8px 16px' }}>
+        <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
           {saving ? 'Saving...' : 'Save Payment'}
         </button>
       </form>

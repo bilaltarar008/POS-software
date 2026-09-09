@@ -23,11 +23,7 @@ export default function PartyStatementPage() {
         if (partyError) throw partyError
 
         const { data: entryData, error: entryError } = await withTimeout(
-          supabase
-            .from('ledger_entries')
-            .select('*')
-            .eq('party_id', id)
-            .order('created_at', { ascending: true })
+          supabase.from('ledger_entries').select('*').eq('party_id', id).order('created_at', { ascending: true })
         )
         if (entryError) throw entryError
 
@@ -49,10 +45,9 @@ export default function PartyStatementPage() {
     fetchData()
   }, [id])
 
-  if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
-  if (!party) return <main style={{ padding: '2rem' }}>Party not found{offline ? ' (and you are offline)' : ''}</main>
+  if (loading) return <main className="page-container">Loading...</main>
+  if (!party) return <main className="page-container">Party not found{offline ? ' (and you are offline)' : ''}</main>
 
-  // Running balance, computed in order
   let runningBalance = 0
   const rows = entries.map((e) => {
     runningBalance += Number(e.amount)
@@ -70,19 +65,19 @@ export default function PartyStatementPage() {
   }
 
   return (
-    <main style={{ padding: '2rem' }}>
+    <main className="page-container">
       {offline && (
-        <p style={{ background: '#fef3c7', padding: 8, borderRadius: 4, marginBottom: 16 }}>
+        <p className="bg-amber-100 text-amber-800 p-2 rounded mb-4 text-sm">
           ⚠️ You're offline. Showing last saved data.
         </p>
       )}
-      <Link href="/parties">← Back to Balances</Link>
-      <h1 style={{ marginTop: 8 }}>{party.name}</h1>
-      <p style={{ color: '#666', textTransform: 'capitalize' }}>{party.type}{party.phone ? ` · ${party.phone}` : ''}</p>
+      <Link href="/parties" className="text-blue-600 hover:underline">← Back to Balances</Link>
+      <h1 className="text-2xl font-bold mt-2">{party.name}</h1>
+      <p className="text-gray-600 capitalize">{party.type}{party.phone ? ` · ${party.phone}` : ''}</p>
 
-      <div style={{ marginTop: 16, padding: 16, background: '#f5f5f5', borderRadius: 8, display: 'inline-block' }}>
-        <p style={{ margin: 0 }}>Current Balance</p>
-        <h2 style={{ margin: 0, color: runningBalance > 0 ? '#dc2626' : '#16a34a' }}>
+      <div className="mt-4 p-4 bg-gray-100 rounded-lg inline-block">
+        <p className="m-0 text-sm">Current Balance</p>
+        <h2 className={`m-0 text-xl font-bold ${runningBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
           Rs. {Math.abs(runningBalance).toFixed(2)}
           {runningBalance > 0
             ? party.type === 'customer' ? ' (they owe you)' : ' (you owe them)'
@@ -90,34 +85,36 @@ export default function PartyStatementPage() {
         </h2>
       </div>
 
-      <h2 style={{ marginTop: 32 }}>Transaction History</h2>
-      {rows.length === 0 && <p>No transactions yet.</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #ccc' }}>
-            <th>Type</th>
-            <th>Note</th>
-            <th>Amount</th>
-            <th>Running Balance</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td>{labelFor(row.entry_type)}</td>
-              <td>{row.note || '—'}</td>
-              <td style={{ color: Number(row.amount) > 0 ? '#dc2626' : '#16a34a' }}>
-                {Number(row.amount) > 0 ? '+' : ''}Rs. {Number(row.amount).toFixed(2)}
-              </td>
-              <td>Rs. {row.runningBalance.toFixed(2)}</td>
-              <td>
-                {row.invoice_id && <Link href={`/invoices/${row.invoice_id}`}>View Invoice</Link>}
-              </td>
+      <h2 className="text-lg font-semibold mt-8">Transaction History</h2>
+      {rows.length === 0 && <p className="text-gray-600">No transactions yet.</p>}
+      <div className="overflow-x-auto mt-2">
+        <table className="table-base">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Note</th>
+              <th>Amount</th>
+              <th>Running Balance</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>{labelFor(row.entry_type)}</td>
+                <td>{row.note || '—'}</td>
+                <td className={Number(row.amount) > 0 ? 'text-red-600' : 'text-green-600'}>
+                  {Number(row.amount) > 0 ? '+' : ''}Rs. {Number(row.amount).toFixed(2)}
+                </td>
+                <td>Rs. {row.runningBalance.toFixed(2)}</td>
+                <td>
+                  {row.invoice_id && <Link href={`/invoices/${row.invoice_id}`} className="text-blue-600 hover:underline">View Invoice</Link>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </main>
   )
 }

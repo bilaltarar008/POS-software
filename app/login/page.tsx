@@ -21,25 +21,25 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 400 }}>
-      <h1>Login</h1>
+    <main className="page-container max-w-sm">
+      <h1 className="text-2xl font-bold mb-4">Login</h1>
       <form onSubmit={handleLogin}>
+        <label className="label-text">Email</label>
         <input
           type="email"
-          placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          style={{ display: 'block', marginBottom: 10, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         />
+        <label className="label-text">Password</label>
         <input
           type="password"
-          placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          style={{ display: 'block', marginBottom: 10, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         />
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit" style={{ padding: '8px 16px' }}>Log In</button>
+        {error && <p className="text-red-600 mb-3">{error}</p>}
+        <button type="submit" className="btn-primary">Log In</button>
       </form>
     </main>
   )

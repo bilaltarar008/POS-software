@@ -3,18 +3,18 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
-import { useSyncStatus } from '@/lib/useSyncStatus'
 import { supabase } from '@/lib/supabase'
 import { isOnline, queueOp } from '@/lib/sync'
+import { useSyncStatus } from '@/lib/useSyncStatus'
 
 export default function NewCapitalPage() {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
-    const pendingCount = useSyncStatus()
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedOffline, setSavedOffline] = useState(false)
   const router = useRouter()
+  const pendingCount = useSyncStatus()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,54 +44,54 @@ export default function NewCapitalPage() {
     }
   }
 
-    if (savedOffline) {
+  if (savedOffline) {
     return (
-      <main style={{ padding: '2rem', maxWidth: 400 }}>
-        <h1>Saved Offline</h1>
+      <main className="page-container max-w-sm">
+        <h1 className="text-2xl font-bold mb-4">Saved Offline</h1>
         {pendingCount !== null && pendingCount > 0 && (
-          <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
-            No internet connection — this product was saved on your device and will sync to the cloud automatically once you're back online.
+          <p className="bg-amber-100 text-amber-800 p-3 rounded mb-3">
+            No internet connection — this capital entry was saved on your device and will sync to the cloud automatically once you're back online.
           </p>
         )}
         {pendingCount === 0 && (
-          <p style={{ background: '#dcfce7', padding: 12, borderRadius: 4 }}>
-            ✅ Synced! This product has been saved to the cloud.
+          <p className="bg-green-100 text-green-800 p-3 rounded mb-3">
+            ✅ Synced! This capital entry has been saved to the cloud.
           </p>
         )}
-        <a href="/">← Back to Products</a>
+        <a href="/" className="text-blue-600 hover:underline">← Back to Products</a>
       </main>
     )
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 400 }}>
-      <h1>Record Capital</h1>
-      <p style={{ color: '#666', marginBottom: 16 }}>
+    <main className="page-container max-w-sm">
+      <h1 className="text-2xl font-bold mb-4">Record Capital</h1>
+      <p className="text-gray-600 mb-4 text-sm">
         Log money you're putting into the business (e.g. monthly investment).
       </p>
       <form onSubmit={handleSubmit}>
-        <label style={{ display: 'block', marginBottom: 4 }}>Amount</label>
+        <label className="label-text">Amount</label>
         <input
           type="number"
           step="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           required
-          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         />
 
-        <label style={{ display: 'block', marginBottom: 4 }}>Note (optional)</label>
+        <label className="label-text">Note (optional)</label>
         <input
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="e.g. September investment"
-          style={{ display: 'block', marginBottom: 12, width: '100%', padding: 8 }}
+          className="input-field mb-3"
         />
 
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {error && <p className="text-red-600 mb-3">{error}</p>}
 
-        <button type="submit" disabled={saving} style={{ padding: '8px 16px' }}>
+        <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
           {saving ? 'Saving...' : 'Save'}
         </button>
       </form>

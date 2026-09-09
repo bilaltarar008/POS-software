@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
 import { isOnline, queueOp, withTimeout } from '@/lib/sync'
+import { useSyncStatus } from '@/lib/useSyncStatus'
 
 type LineItem = {
   productId: string
@@ -28,10 +29,10 @@ export default function NewInvoicePage() {
   const [saving, setSaving] = useState(false)
   const [savedOffline, setSavedOffline] = useState(false)
   const router = useRouter()
+  const pendingCount = useSyncStatus()
 
   useEffect(() => {
     const fetchData = async () => {
-      // Customers
       try {
         const { data, error } = await withTimeout(
           supabase.from('parties').select('id, name, type').eq('type', 'customer').order('name')
@@ -44,7 +45,6 @@ export default function NewInvoicePage() {
         setCustomers(cached)
       }
 
-      // Brokers
       try {
         const { data, error } = await withTimeout(
           supabase.from('parties').select('id, name, type, brokerage_fee_percent').eq('type', 'broker').order('name')
@@ -57,7 +57,6 @@ export default function NewInvoicePage() {
         setBrokers(cached as any[])
       }
 
-      // Products
       try {
         const { data, error } = await withTimeout(
           supabase.from('products').select('id, name, price_per_maund, cost_price_per_maund').order('name')
@@ -116,14 +115,14 @@ export default function NewInvoicePage() {
 
     const invoiceId = uuidv4()
 
-      const invoiceRow = {
+    const invoiceRow = {
       id: invoiceId,
       party_id: partyId,
       total: grandTotal,
       amount_paid: paidNum,
       broker_id: brokerId || null,
       brokerage_amount: brokerageAmount,
-      invoice_date: new Date().toISOString().split('T')[0], // e.g. "2026-09-06"
+      invoice_date: new Date().toISOString().split('T')[0],
     }
 
     const itemRows = items.map((item) => ({
@@ -205,43 +204,48 @@ export default function NewInvoicePage() {
 
   if (savedOffline) {
     return (
-      <main style={{ padding: '2rem', maxWidth: 400 }}>
-        <h1>Saved Offline</h1>
-        <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
-          No internet connection — this invoice was saved on your device and will sync to the cloud automatically once you're back online.
-        </p>
-        <a href="/">← Back to Products</a>
+      <main className="page-container max-w-sm">
+        <h1 className="text-2xl font-bold mb-4">Saved Offline</h1>
+        {pendingCount !== null && pendingCount > 0 && (
+          <p className="bg-amber-100 text-amber-800 p-3 rounded mb-3">
+            No internet connection — this invoice was saved on your device and will sync to the cloud automatically once you're back online.
+          </p>
+        )}
+        {pendingCount === 0 && (
+          <p className="bg-green-100 text-green-800 p-3 rounded mb-3">
+            ✅ Synced! This invoice has been saved to the cloud.
+          </p>
+        )}
+        <a href="/" className="text-blue-600 hover:underline">← Back to Products</a>
       </main>
     )
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 700 }}>
-      <h1>New Invoice</h1>
+    <main className="page-container max-w-2xl">
+      <h1 className="text-2xl font-bold mb-4">New Invoice</h1>
       <form onSubmit={handleSubmit}>
-        <label style={{ display: 'block', marginBottom: 4 }}>Customer</label>
+        <label className="label-text">Customer</label>
         <select
           value={partyId}
           onChange={(e) => setPartyId(e.target.value)}
           required
-          style={{ display: 'block', marginBottom: 16, width: '100%', padding: 8 }}
+          className="input-field mb-2"
         >
           <option value="">Select a customer</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-
-                <label style={{ display: 'block', marginBottom: 4 }}>Customer</label>
-        <a href="/parties/new" style={{ fontSize: 14, color: '#0070f3', display: 'inline-block', marginBottom: 16 }}>
+        <a href="/parties/new" className="text-blue-600 hover:underline text-sm inline-block mb-4">
           + Add a new customer
         </a>
 
-        <label style={{ display: 'block', marginBottom: 4 }}>Broker (optional)</label>
+        <label className="label-text">Broker (optional)</label>
         <select
           value={brokerId}
           onChange={(e) => setBrokerId(e.target.value)}
-          style={{ display: 'block', marginBottom: 16, width: '100%', padding: 8 }}
+          className="input-field mb-4"
         >
           <option value="">No broker</option>
           {brokers.map((b) => (
@@ -249,14 +253,14 @@ export default function NewInvoicePage() {
           ))}
         </select>
 
-        <h3>Items</h3>
+        <h3 className="font-semibold mb-2">Items</h3>
         {items.map((item, index) => (
-          <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+          <div key={index} className="flex flex-col sm:flex-row gap-2 mb-2 sm:items-center">
             <select
               value={item.productId}
               onChange={(e) => updateItem(index, 'productId', e.target.value)}
               required
-              style={{ flex: 2, padding: 8 }}
+              className="input-field sm:flex-[2]"
             >
               <option value="">Select product</option>
               {products.map((p) => (
@@ -270,7 +274,7 @@ export default function NewInvoicePage() {
               onChange={(e) => updateItem(index, 'weightKg', parseFloat(e.target.value) || 0)}
               placeholder="Weight (kg)"
               required
-              style={{ flex: 1, padding: 8 }}
+              className="input-field sm:flex-1"
             />
 
             <input
@@ -280,54 +284,54 @@ export default function NewInvoicePage() {
               onChange={(e) => updateItem(index, 'ratePerMaund', parseFloat(e.target.value) || 0)}
               placeholder="Rate / Maund"
               required
-              style={{ flex: 1, padding: 8 }}
+              className="input-field sm:flex-1"
             />
 
-            <span style={{ flex: 1 }}>Rs. {lineTotal(item).toFixed(2)}</span>
+            <span className="sm:flex-1 text-sm font-medium">Rs. {lineTotal(item).toFixed(2)}</span>
 
             {items.length > 1 && (
-              <button type="button" onClick={() => removeItem(index)}>✕</button>
+              <button type="button" onClick={() => removeItem(index)} className="text-red-600 self-start sm:self-auto">✕</button>
             )}
           </div>
         ))}
 
-        <button type="button" onClick={addItem} style={{ marginBottom: 16 }}>
+        <button type="button" onClick={addItem} className="btn-secondary mb-4 text-sm">
           + Add Item
         </button>
 
-        <h3>Grand Total: Rs. {grandTotal.toFixed(2)}</h3>
+        <h3 className="text-lg font-semibold">Grand Total: Rs. {grandTotal.toFixed(2)}</h3>
 
         {selectedBroker && (
-          <p style={{ color: '#d97706' }}>
+          <p className="text-amber-700 mt-1">
             Brokerage ({selectedBroker.brokerage_fee_percent}%): Rs. {brokerageAmount.toFixed(2)}
           </p>
         )}
 
-        <div style={{ marginTop: 16, padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
-          <label style={{ display: 'block', marginBottom: 4 }}>Amount Paid Now</label>
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg">
+          <label className="label-text">Amount Paid Now</label>
           <input
             type="number"
             step="0.01"
             value={amountPaid}
             onChange={(e) => setAmountPaid(e.target.value)}
-            style={{ display: 'block', marginBottom: 8, width: '100%', padding: 8 }}
+            className="input-field mb-2"
           />
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <button type="button" onClick={() => setAmountPaid(grandTotal.toString())}>
+          <div className="flex gap-2 mb-2">
+            <button type="button" onClick={() => setAmountPaid(grandTotal.toString())} className="btn-secondary text-sm">
               Mark Fully Paid
             </button>
-            <button type="button" onClick={() => setAmountPaid('0')}>
+            <button type="button" onClick={() => setAmountPaid('0')} className="btn-secondary text-sm">
               Fully on Credit
             </button>
           </div>
-          <p style={{ margin: 0, fontWeight: 'bold', color: creditAmount > 0 ? '#dc2626' : '#16a34a' }}>
+          <p className={`font-bold ${creditAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
             {creditAmount > 0 ? `On Credit: Rs. ${creditAmount.toFixed(2)}` : 'Fully Paid'}
           </p>
         </div>
 
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {error && <p className="text-red-600 mt-3">{error}</p>}
 
-        <button type="submit" disabled={saving} style={{ padding: '8px 16px', marginTop: 16 }}>
+        <button type="submit" disabled={saving} className="btn-primary mt-4 disabled:opacity-50">
           {saving ? 'Saving...' : 'Save Invoice'}
         </button>
       </form>

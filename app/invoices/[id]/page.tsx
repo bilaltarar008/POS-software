@@ -26,10 +26,7 @@ export default function InvoiceViewPage() {
         if (invoiceError) throw invoiceError
 
         const { data: itemData, error: itemsError } = await withTimeout(
-          supabase
-            .from('invoice_items')
-            .select('*, products(name)')
-            .eq('invoice_id', id)
+          supabase.from('invoice_items').select('*, products(name)').eq('invoice_id', id)
         )
         if (itemsError) throw itemsError
 
@@ -37,7 +34,6 @@ export default function InvoiceViewPage() {
         setItems(itemData || [])
         setOffline(false)
 
-        // Cache everything for offline viewing later
         await localDb.invoices.put({
           id: invoiceData.id,
           party_id: invoiceData.party_id,
@@ -63,7 +59,6 @@ export default function InvoiceViewPage() {
           }))
         )
       } catch {
-        // Offline or fetch failed — read from local cache instead
         setOffline(true)
         const cachedInvoice = await localDb.invoices.get(id as string)
         const cachedItems = await localDb.invoice_items.where('invoice_id').equals(id as string).toArray()
@@ -74,9 +69,7 @@ export default function InvoiceViewPage() {
             parties: { name: cachedInvoice.party_name },
             broker: { name: cachedInvoice.broker_name },
           })
-          setItems(
-            cachedItems.map((item) => ({ ...item, products: { name: item.product_name } }))
-          )
+          setItems(cachedItems.map((item) => ({ ...item, products: { name: item.product_name } })))
         }
       }
       setLoading(false)
@@ -84,60 +77,62 @@ export default function InvoiceViewPage() {
     fetchData()
   }, [id])
 
-  if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
-  if (!invoice) return <main style={{ padding: '2rem' }}>Invoice not found{offline ? ' (and you are offline — it may not be cached yet)' : ''}</main>
+  if (loading) return <main className="page-container">Loading...</main>
+  if (!invoice) return <main className="page-container">Invoice not found{offline ? ' (and you are offline — it may not be cached yet)' : ''}</main>
 
   const balanceDue = invoice.total - invoice.amount_paid
   const status = balanceDue <= 0 ? 'Paid' : invoice.amount_paid > 0 ? 'Partially Paid' : 'On Credit'
-  const statusColor = balanceDue <= 0 ? '#16a34a' : invoice.amount_paid > 0 ? '#d97706' : '#dc2626'
+  const statusColor = balanceDue <= 0 ? 'text-green-600' : invoice.amount_paid > 0 ? 'text-amber-600' : 'text-red-600'
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 700 }}>
+    <main className="page-container max-w-2xl">
       {offline && (
-        <p style={{ background: '#fef3c7', padding: 8, borderRadius: 4, marginBottom: 16 }}>
+        <p className="bg-amber-100 text-amber-800 p-2 rounded mb-4 text-sm">
           ⚠️ You're offline. Showing last saved data.
         </p>
       )}
-      <button onClick={() => window.print()} style={{ marginBottom: 16, padding: '8px 16px' }}>
+      <button onClick={() => window.print()} className="btn-secondary mb-4">
         Print
       </button>
-      <h1>Invoice</h1>
+      <h1 className="text-2xl font-bold mb-2">Invoice</h1>
       <p><strong>Customer:</strong> {invoice.parties?.name}</p>
       <p><strong>Date:</strong> {invoice.invoice_date}</p>
       <p>
         <strong>Status:</strong>{' '}
-        <span style={{ color: statusColor, fontWeight: 'bold' }}>{status}</span>
+        <span className={`font-bold ${statusColor}`}>{status}</span>
       </p>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #ccc' }}>
-            <th>Product</th>
-            <th>Weight (kg)</th>
-            <th>Rate / Maund</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td>{item.products?.name}</td>
-              <td>{item.weight_kg}</td>
-              <td>Rs. {item.rate_per_maund}</td>
-              <td>Rs. {item.line_total}</td>
+      <div className="overflow-x-auto mt-4">
+        <table className="table-base">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Weight (kg)</th>
+              <th>Rate / Maund</th>
+              <th>Total</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id}>
+                <td>{item.products?.name}</td>
+                <td>{item.weight_kg}</td>
+                <td>Rs. {item.rate_per_maund}</td>
+                <td>Rs. {item.line_total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <div style={{ marginTop: 16 }}>
+      <div className="mt-4 space-y-1">
         <p><strong>Grand Total:</strong> Rs. {invoice.total}</p>
         <p><strong>Paid:</strong> Rs. {invoice.amount_paid}</p>
-        <p style={{ color: balanceDue > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>
+        <p className={`font-bold ${balanceDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
           Balance Due: Rs. {balanceDue.toFixed(2)}
         </p>
         {invoice.broker_id && (
-          <p><strong>Broker:</strong> {invoice.parties?.name === invoice.broker_name ? '' : invoice.broker_name} — Brokerage: Rs. {invoice.brokerage_amount}</p>
+          <p><strong>Broker:</strong> {invoice.broker_name} — Brokerage: Rs. {invoice.brokerage_amount}</p>
         )}
       </div>
     </main>

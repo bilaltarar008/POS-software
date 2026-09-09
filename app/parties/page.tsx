@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
-import Link from 'next/link'
 import { withTimeout } from '@/lib/sync'
 
 export default function PartiesPage() {
@@ -26,7 +26,6 @@ export default function PartiesPage() {
 
         setOffline(false)
 
-        // Cache both for offline use
         await localDb.parties.bulkPut(parties || [])
         await localDb.ledger_entries.bulkPut(entries || [])
 
@@ -46,50 +45,46 @@ export default function PartiesPage() {
         balanceMap[e.party_id] = (balanceMap[e.party_id] || 0) + Number(e.amount)
       })
 
-      const result = parties.map((p) => ({
-        ...p,
-        balance: balanceMap[p.id] || 0,
-      }))
-
+      const result = parties.map((p) => ({ ...p, balance: balanceMap[p.id] || 0 }))
       setBalances(result)
     }
 
     fetchBalances()
   }, [])
 
-  if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
+  if (loading) return <main className="page-container">Loading...</main>
 
   const owedToYou = balances.filter((b) => b.type === 'customer' && b.balance > 0)
   const youOwe = balances.filter((b) => (b.type === 'supplier' || b.type === 'broker') && b.balance > 0)
 
   return (
-    <main style={{ padding: '2rem' }}>
+    <main className="page-container">
       {offline && (
-        <p style={{ background: '#fef3c7', padding: 8, borderRadius: 4, marginBottom: 16 }}>
+        <p className="bg-amber-100 text-amber-800 p-2 rounded mb-4 text-sm">
           ⚠️ You're offline. Showing last saved data.
         </p>
       )}
-            <a href="/parties/new" style={{ display: 'inline-block', marginBottom: 16, padding: '8px 16px', background: '#0070f3', color: 'white', textDecoration: 'none', borderRadius: 4 }}>
+      <h1 className="text-2xl font-bold mb-4">Party Balances</h1>
+      <Link href="/parties/new" className="btn-primary mb-6 inline-block">
         + Add Customer / Supplier / Broker
-      </a>
-      <h1>Party Balances</h1>
+      </Link>
 
-            <h2 style={{ color: '#16a34a' }}>Owed to You</h2>
-      {owedToYou.length === 0 && <p>Nobody owes you right now.</p>}
-      <ul>
+      <h2 className="text-lg font-semibold text-green-600 mt-4">Owed to You</h2>
+      {owedToYou.length === 0 && <p className="text-gray-600">Nobody owes you right now.</p>}
+      <ul className="mt-2 space-y-1">
         {owedToYou.map((b) => (
           <li key={b.id}>
-            <Link href={`/parties/${b.id}`}>{b.name}</Link>: Rs. {b.balance.toFixed(2)}
+            <Link href={`/parties/${b.id}`} className="text-blue-600 hover:underline">{b.name}</Link>: Rs. {b.balance.toFixed(2)}
           </li>
         ))}
       </ul>
 
-      <h2 style={{ color: '#dc2626', marginTop: 24 }}>You Owe</h2>
-      {youOwe.length === 0 && <p>You don't owe anyone right now.</p>}
-      <ul>
+      <h2 className="text-lg font-semibold text-red-600 mt-6">You Owe</h2>
+      {youOwe.length === 0 && <p className="text-gray-600">You don't owe anyone right now.</p>}
+      <ul className="mt-2 space-y-1">
         {youOwe.map((b) => (
           <li key={b.id}>
-            <Link href={`/parties/${b.id}`}>{b.name}</Link>: Rs. {b.balance.toFixed(2)}
+            <Link href={`/parties/${b.id}`} className="text-blue-600 hover:underline">{b.name}</Link>: Rs. {b.balance.toFixed(2)}
           </li>
         ))}
       </ul>

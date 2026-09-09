@@ -22,7 +22,6 @@ export default function Home() {
         )
         if (error) throw error
 
-        // Success: show the fresh data AND save a local copy for offline use
         setProducts(data || [])
         setOffline(false)
 
@@ -36,12 +35,9 @@ export default function Home() {
         }))
         await localDb.products.bulkPut(localCopies)
       } catch (err) {
-        // Failed (likely offline): fall back to whatever we last saved locally
         setOffline(true)
         const cached = await localDb.products.toArray()
-        setProducts(
-          cached.map((p) => ({ ...p, categories: { name: p.category_name } }))
-        )
+        setProducts(cached.map((p) => ({ ...p, categories: { name: p.category_name } })))
       }
       setLoading(false)
     }
@@ -49,40 +45,42 @@ export default function Home() {
     fetchProducts()
   }, [])
 
-  if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
+  if (loading) return <main className="page-container">Loading...</main>
 
   return (
-    <main style={{ padding: '2rem' }}>
-      <h1>Products</h1>
+    <main className="page-container">
+      <h1 className="text-2xl font-bold mb-4">Products</h1>
       {offline && (
-        <p style={{ background: '#fef3c7', padding: 8, borderRadius: 4, marginBottom: 16 }}>
+        <p className="bg-amber-100 text-amber-800 p-2 rounded mb-4 text-sm">
           ⚠️ You're offline. Showing last saved data.
         </p>
       )}
-      <a href="/products/new" style={{ display: 'inline-block', marginBottom: 16, padding: '8px 16px', background: '#0070f3', color: 'white', textDecoration: 'none', borderRadius: 4 }}>
+      <a href="/products/new" className="btn-primary mb-4 inline-block">
         + Add Product
       </a>
-      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #ccc' }}>
-            <th>Category</th>
-            <th>Product</th>
-            <th>Price / Maund (40kg)</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((p: any) => (
-            <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td>{p.categories?.name}</td>
-              <td>{p.name}</td>
-              <td>Rs. {p.price_per_maund}</td>
-              <td><a href={`/products/${p.id}/edit`}>Edit</a></td>
+      {error && <p className="text-red-600">Error: {error}</p>}
+      <div className="overflow-x-auto">
+        <table className="table-base">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Product</th>
+              <th>Price / Maund (40kg)</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {products.map((p: any) => (
+              <tr key={p.id}>
+                <td>{p.categories?.name}</td>
+                <td>{p.name}</td>
+                <td>Rs. {p.price_per_maund}</td>
+                <td><a href={`/products/${p.id}/edit`} className="text-blue-600 hover:underline">Edit</a></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </main>
   )
 }

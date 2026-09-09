@@ -5,7 +5,44 @@ import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
 import { withTimeout } from '@/lib/sync'
 
+type RangeOption = 'all' | 'this_month' | 'last_month' | 'this_year' | 'custom'
+
+function getRangeDates(range: RangeOption, customStart: string, customEnd: string): { start: string | null; end: string | null } {
+  const now = new Date()
+
+  if (range === 'all') return { start: null, end: null }
+
+  if (range === 'this_month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1)
+    return { start: start.toISOString().split('T')[0], end: null }
+  }
+
+  if (range === 'last_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const end = new Date(now.getFullYear(), now.getMonth(), 0)
+    return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] }
+  }
+
+  if (range === 'this_year') {
+    const start = new Date(now.getFullYear(), 0, 1)
+    return { start: start.toISOString().split('T')[0], end: null }
+  }
+
+  // custom
+  return { start: customStart || null, end: customEnd || null }
+}
+
 export default function DashboardPage() {
+  const [range, setRange] = useState<RangeOption>('this_month')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+
+  const [allParties, setAllParties] = useState<any[]>([])
+  const [allEntries, setAllEntries] = useState<any[]>([])
+  const [allCapital, setAllCapital] = useState<any[]>([])
+  const [allInvoices, setAllInvoices] = useState<any[]>([])
+  const [allItems, setAllItems] = useState<any[]>([])
+
   const [totalSales, setTotalSales] = useState(0)
   const [totalCapital, setTotalCapital] = useState(0)
   const [totalProfit, setTotalProfit] = useState(0)
@@ -18,78 +55,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(false)
 
+  // Fetch everything once, unfiltered — filtering happens client-side afterward
   useEffect(() => {
-    const computeEverything = (
-      parties: any[],
-      entries: any[],
-      capital: any[],
-      invoices: any[],
-      items: any[]
-    ) => {
-      setTotalSales(
-        entries.filter((e) => e.entry_type === 'sale').reduce((sum, e) => sum + Number(e.amount), 0)
-      )
-
-      setTotalReceived(
-        Math.abs(
-          entries
-            .filter((e) => e.entry_type === 'payment_received')
-            .reduce((sum, e) => sum + Number(e.amount), 0)
-        )
-      )
-
-      setTotalCapital(capital.reduce((sum, e) => sum + Number(e.amount), 0))
-
-      setTotalBrokerage(invoices.reduce((sum, i) => sum + Number(i.brokerage_amount || 0), 0))
-
-      const balanceMap: Record<string, number> = {}
-      entries.forEach((e) => {
-        balanceMap[e.party_id] = (balanceMap[e.party_id] || 0) + Number(e.amount)
-      })
-
-      const balances = parties
-        .map((p) => ({ ...p, balance: balanceMap[p.id] || 0 }))
-        .filter((p) => Math.abs(p.balance) > 0.01)
-        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
-
-      setPartyBalances(balances)
-
-      setTotalCreditOut(
-        balances.filter((p) => p.type === 'customer' && p.balance > 0).reduce((sum, p) => sum + p.balance, 0)
-      )
-      setTotalCreditIn(
-        balances
-          .filter((p) => (p.type === 'supplier' || p.type === 'broker') && p.balance > 0)
-          .reduce((sum, p) => sum + p.balance, 0)
-      )
-
-      let profit = 0
-      const productMap: Record<string, any> = {}
-
-      items.forEach((item: any) => {
-        const maunds = item.weight_kg / 40
-        const revenue = maunds * item.rate_per_maund
-        const cost = maunds * item.cost_per_maund
-        profit += revenue - cost
-
-        const key = item.product_id
-        if (!productMap[key]) {
-          productMap[key] = {
-            name: item.product_name || item.products?.name || 'Unknown',
-            totalWeightKg: 0,
-            revenue: 0,
-            profit: 0,
-          }
-        }
-        productMap[key].totalWeightKg += Number(item.weight_kg)
-        productMap[key].revenue += revenue
-        productMap[key].profit += revenue - cost
-      })
-
-      setTotalProfit(profit)
-      setProductStats(Object.values(productMap).sort((a: any, b: any) => b.revenue - a.revenue))
-    }
-
     const fetchData = async () => {
       try {
         const { data: parties, error: e1 } = await withTimeout(
@@ -108,21 +75,31 @@ export default function DashboardPage() {
         if (e3) throw e3
 
         const { data: invoices, error: e4 } = await withTimeout(
-          supabase.from('invoices').select('brokerage_amount')
+          supabase.from('invoices').select('id, brokerage_amount, invoice_date')
         )
         if (e4) throw e4
 
         const { data: items, error: e5 } = await withTimeout(
-          supabase.from('invoice_items').select('*, products(name)')
+          supabase.from('invoice_items').select('*, products(name), invoices(invoice_date)')
         )
         if (e5) throw e5
 
         setOffline(false)
 
-        // Cache everything for offline use
         await localDb.parties.bulkPut(parties || [])
         await localDb.ledger_entries.bulkPut(entries || [])
         await localDb.capital_entries.bulkPut(capital || [])
+        await localDb.invoices.bulkPut(
+          (invoices || []).map((inv: any) => ({
+            id: inv.id,
+            party_id: '',
+            broker_id: null,
+            invoice_date: inv.invoice_date,
+            total: 0,
+            amount_paid: 0,
+            brokerage_amount: inv.brokerage_amount,
+          }))
+        )
         await localDb.invoice_items.bulkPut(
           (items || []).map((item: any) => ({
             id: item.id,
@@ -136,16 +113,30 @@ export default function DashboardPage() {
           }))
         )
 
-        computeEverything(parties || [], entries || [], capital || [], invoices || [], items || [])
+        setAllParties(parties || [])
+        setAllEntries((entries || []).map((e: any) => ({ ...e, date: e.created_at?.split('T')[0] })))
+        setAllCapital((capital || []).map((c: any) => ({ ...c, date: c.entry_date })))
+        setAllInvoices(invoices || [])
+        setAllItems(
+          (items || []).map((item: any) => ({
+            ...item,
+            product_name: item.products?.name,
+            invoice_date: item.invoices?.invoice_date,
+          }))
+        )
       } catch {
         setOffline(true)
         const parties = await localDb.parties.toArray()
         const entries = await localDb.ledger_entries.toArray()
         const capital = await localDb.capital_entries.toArray()
-        const items = await localDb.invoice_items.toArray()
         const invoices = await localDb.invoices.toArray()
+        const items = await localDb.invoice_items.toArray()
 
-        computeEverything(parties, entries, capital, invoices, items)
+        setAllParties(parties)
+        setAllEntries(entries.map((e: any) => ({ ...e, date: null }))) // offline: no created_at cached, so date-filtering won't apply
+        setAllCapital(capital.map((c: any) => ({ ...c, date: c.entry_date })))
+        setAllInvoices(invoices)
+        setAllItems(items.map((item: any) => ({ ...item, invoice_date: null })))
       }
       setLoading(false)
     }
@@ -153,16 +144,101 @@ export default function DashboardPage() {
     fetchData()
   }, [])
 
+  // Recompute whenever the range or raw data changes
+  useEffect(() => {
+    if (loading) return
+
+    const { start, end } = getRangeDates(range, customStart, customEnd)
+
+    const inRange = (dateStr: string | null | undefined) => {
+      if (!dateStr) return range === 'all' // if we have no date (offline fallback), only include under "All time"
+      if (start && dateStr < start) return false
+      if (end && dateStr > end) return false
+      return true
+    }
+
+    const entries = allEntries.filter((e) => inRange(e.date))
+    const capital = allCapital.filter((c) => inRange(c.date))
+    const invoices = allInvoices.filter((i) => inRange(i.invoice_date))
+    const items = allItems.filter((i) => inRange(i.invoice_date))
+
+    setTotalSales(
+      entries.filter((e) => e.entry_type === 'sale').reduce((sum, e) => sum + Number(e.amount), 0)
+    )
+    setTotalReceived(
+      Math.abs(
+        entries.filter((e) => e.entry_type === 'payment_received').reduce((sum, e) => sum + Number(e.amount), 0)
+      )
+    )
+    setTotalCapital(capital.reduce((sum, e) => sum + Number(e.amount), 0))
+    setTotalBrokerage(invoices.reduce((sum, i) => sum + Number(i.brokerage_amount || 0), 0))
+
+    // Party balances always reflect all-time totals — a balance owed doesn't
+    // reset each month, so this table intentionally ignores the date filter.
+    const balanceMap: Record<string, number> = {}
+    allEntries.forEach((e) => {
+      balanceMap[e.party_id] = (balanceMap[e.party_id] || 0) + Number(e.amount)
+    })
+    const balances = allParties
+      .map((p) => ({ ...p, balance: balanceMap[p.id] || 0 }))
+      .filter((p) => Math.abs(p.balance) > 0.01)
+      .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
+    setPartyBalances(balances)
+    setTotalCreditOut(
+      balances.filter((p) => p.type === 'customer' && p.balance > 0).reduce((sum, p) => sum + p.balance, 0)
+    )
+    setTotalCreditIn(
+      balances.filter((p) => (p.type === 'supplier' || p.type === 'broker') && p.balance > 0).reduce((sum, p) => sum + p.balance, 0)
+    )
+
+    let profit = 0
+    const productMap: Record<string, any> = {}
+    items.forEach((item: any) => {
+      const maunds = item.weight_kg / 40
+      const revenue = maunds * item.rate_per_maund
+      const cost = maunds * item.cost_per_maund
+      profit += revenue - cost
+
+      const key = item.product_id
+      if (!productMap[key]) {
+        productMap[key] = { name: item.product_name || 'Unknown', totalWeightKg: 0, revenue: 0, profit: 0 }
+      }
+      productMap[key].totalWeightKg += Number(item.weight_kg)
+      productMap[key].revenue += revenue
+      productMap[key].profit += revenue - cost
+    })
+    setTotalProfit(profit)
+    setProductStats(Object.values(productMap).sort((a: any, b: any) => b.revenue - a.revenue))
+  }, [range, customStart, customEnd, loading, allEntries, allCapital, allInvoices, allItems, allParties])
+
   if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
 
   return (
     <main style={{ padding: '2rem' }}>
       {offline && (
         <p style={{ background: '#fef3c7', padding: 8, borderRadius: 4, marginBottom: 16 }}>
-          ⚠️ You're offline. Showing last saved data.
+          ⚠️ You're offline. Showing last saved data. Date filtering may be limited until you're back online.
         </p>
       )}
       <h1>Dashboard</h1>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
+        <label>Show:</label>
+        <select value={range} onChange={(e) => setRange(e.target.value as RangeOption)} style={{ padding: 8 }}>
+          <option value="this_month">This Month</option>
+          <option value="last_month">Last Month</option>
+          <option value="this_year">This Year</option>
+          <option value="all">All Time</option>
+          <option value="custom">Custom Range</option>
+        </select>
+        {range === 'custom' && (
+          <>
+            <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} style={{ padding: 8 }} />
+            <span>to</span>
+            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} style={{ padding: 8 }} />
+          </>
+        )}
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 16 }}>
         <div style={{ padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
@@ -181,24 +257,24 @@ export default function DashboardPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 16 }}>
         <div style={{ padding: 16, border: '1px solid #dc2626', borderRadius: 8 }}>
-          <p>Credit Owed to You (by customers)</p>
+          <p>Credit Owed to You (all time)</p>
           <h2 style={{ color: '#dc2626' }}>Rs. {totalCreditOut.toFixed(2)}</h2>
         </div>
         <div style={{ padding: 16, border: '1px solid #d97706', borderRadius: 8 }}>
-          <p>You Owe (to suppliers/brokers)</p>
+          <p>You Owe (all time)</p>
           <h2 style={{ color: '#d97706' }}>Rs. {totalCreditIn.toFixed(2)}</h2>
         </div>
         <div style={{ padding: 16, border: '1px solid #d97706', borderRadius: 8 }}>
-          <p>Total Brokerage Paid/Owed</p>
+          <p>Brokerage (selected range)</p>
           <h2 style={{ color: '#d97706' }}>Rs. {totalBrokerage.toFixed(2)}</h2>
         </div>
         <div style={{ padding: 16, border: `1px solid ${totalProfit >= 0 ? '#16a34a' : '#dc2626'}`, borderRadius: 8 }}>
-          <p>Total Profit / Loss</p>
+          <p>Profit / Loss (selected range)</p>
           <h2 style={{ color: totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>Rs. {totalProfit.toFixed(2)}</h2>
         </div>
       </div>
 
-      <h2 style={{ marginTop: 32 }}>Who Owes What</h2>
+      <h2 style={{ marginTop: 32 }}>Who Owes What (all time)</h2>
       {partyBalances.length === 0 && <p>No outstanding balances.</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
         <thead>
@@ -227,8 +303,8 @@ export default function DashboardPage() {
         </tbody>
       </table>
 
-      <h2 style={{ marginTop: 32 }}>Sales by Product</h2>
-      {productStats.length === 0 && <p>No sales yet.</p>}
+      <h2 style={{ marginTop: 32 }}>Sales by Product (selected range)</h2>
+      {productStats.length === 0 && <p>No sales in this range.</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '2px solid #ccc' }}>

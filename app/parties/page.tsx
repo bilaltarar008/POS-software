@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
+import Link from 'next/link'
 import { withTimeout } from '@/lib/sync'
 
 export default function PartiesPage() {
@@ -73,11 +74,13 @@ export default function PartiesPage() {
       </a>
       <h1>Party Balances</h1>
 
-      <h2 style={{ color: '#16a34a' }}>Owed to You</h2>
+            <h2 style={{ color: '#16a34a' }}>Owed to You</h2>
       {owedToYou.length === 0 && <p>Nobody owes you right now.</p>}
       <ul>
         {owedToYou.map((b) => (
-          <li key={b.id}>{b.name}: Rs. {b.balance.toFixed(2)}</li>
+          <li key={b.id}>
+            <Link href={`/parties/${b.id}`}>{b.name}</Link>: Rs. {b.balance.toFixed(2)}
+          </li>
         ))}
       </ul>
 
@@ -85,7 +88,9 @@ export default function PartiesPage() {
       {youOwe.length === 0 && <p>You don't owe anyone right now.</p>}
       <ul>
         {youOwe.map((b) => (
-          <li key={b.id}>{b.name}: Rs. {b.balance.toFixed(2)}</li>
+          <li key={b.id}>
+            <Link href={`/parties/${b.id}`}>{b.name}</Link>: Rs. {b.balance.toFixed(2)}
+          </li>
         ))}
       </ul>
     </main>

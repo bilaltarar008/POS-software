@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
+import { useSyncStatus } from '@/lib/useSyncStatus'
 import { supabase } from '@/lib/supabase'
 import { localDb } from '@/lib/db'
 import { isOnline, queueOp } from '@/lib/sync'
@@ -12,6 +13,7 @@ export default function NewPartyPage() {
   const [type, setType] = useState<'customer' | 'supplier' | 'broker'>('customer')
   const [phone, setPhone] = useState('')
   const [brokerageFee, setBrokerageFee] = useState('1.6')
+    const pendingCount = useSyncStatus()
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedOffline, setSavedOffline] = useState(false)
@@ -49,13 +51,20 @@ export default function NewPartyPage() {
     }
   }
 
-  if (savedOffline) {
+    if (savedOffline) {
     return (
       <main style={{ padding: '2rem', maxWidth: 400 }}>
         <h1>Saved Offline</h1>
-        <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
-          No internet connection — this {type} was saved on your device and will sync to the cloud automatically once you're back online.
-        </p>
+        {pendingCount !== null && pendingCount > 0 && (
+          <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
+            No internet connection — this {type} was saved on your device and will sync to the cloud automatically once you're back online.
+          </p>
+        )}
+        {pendingCount === 0 && (
+          <p style={{ background: '#dcfce7', padding: 12, borderRadius: 4 }}>
+            ✅ Synced! This {type} has been saved to the cloud.
+          </p>
+        )}
         <a href="/">← Back to Products</a>
       </main>
     )

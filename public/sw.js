@@ -4,9 +4,11 @@ const urlsToCache = [
   '/manifest.json',
   '/products/new',
   '/invoices/new',
+  '/invoices',
   '/payments/new',
   '/capital/new',
   '/parties',
+  '/parties/new',
   '/dashboard',
 
 self.addEventListener('install', (event) => {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
+import { useSyncStatus } from '@/lib/useSyncStatus'
 import { localDb } from '@/lib/db'
 import { isOnline, queueOp, withTimeout } from '@/lib/sync'
 
@@ -14,6 +15,7 @@ export default function NewPaymentPage() {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
+  const pendingCount = useSyncStatus()
   const [saving, setSaving] = useState(false)
   const [savedOffline, setSavedOffline] = useState(false)
   const router = useRouter()
@@ -66,13 +68,20 @@ export default function NewPaymentPage() {
     }
   }
 
-  if (savedOffline) {
+    if (savedOffline) {
     return (
       <main style={{ padding: '2rem', maxWidth: 400 }}>
         <h1>Saved Offline</h1>
-        <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
-          No internet connection — this payment was saved on your device and will sync to the cloud automatically once you're back online.
-        </p>
+        {pendingCount !== null && pendingCount > 0 && (
+          <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
+            No internet connection — this product was saved on your device and will sync to the cloud automatically once you're back online.
+          </p>
+        )}
+        {pendingCount === 0 && (
+          <p style={{ background: '#dcfce7', padding: 12, borderRadius: 4 }}>
+            ✅ Synced! This product has been saved to the cloud.
+          </p>
+        )}
         <a href="/">← Back to Products</a>
       </main>
     )

@@ -68,6 +68,9 @@ export default function PartiesPage() {
           ⚠️ You're offline. Showing last saved data.
         </p>
       )}
+            <a href="/parties/new" style={{ display: 'inline-block', marginBottom: 16, padding: '8px 16px', background: '#0070f3', color: 'white', textDecoration: 'none', borderRadius: 4 }}>
+        + Add Customer / Supplier / Broker
+      </a>
       <h1>Party Balances</h1>
 
       <h2 style={{ color: '#16a34a' }}>Owed to You</h2>

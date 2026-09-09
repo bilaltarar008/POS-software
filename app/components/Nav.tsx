@@ -16,6 +16,7 @@ export default function Nav() {
     <nav style={{ display: 'flex', gap: 16, padding: '12px 24px', borderBottom: '1px solid #ddd', background: '#fafafa', alignItems: 'center' }}>
       <Link href="/">Products</Link>
       <Link href="/invoices/new">New Invoice</Link>
+      <Link href="/invoices">All Invoices</Link>
       <Link href="/payments/new">Record Payment</Link>
       <Link href="/capital/new">Record Capital</Link>
       <Link href="/parties">Balances</Link>

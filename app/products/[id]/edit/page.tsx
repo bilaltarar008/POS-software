@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useSyncStatus } from '@/lib/useSyncStatus'
 import { localDb } from '@/lib/db'
 import { withTimeout, isOnline, queueOp } from '@/lib/sync'
 
@@ -12,6 +13,7 @@ export default function EditProductPage() {
   const [categories, setCategories] = useState<any[]>([])
   const [categoryId, setCategoryId] = useState('')
   const [name, setName] = useState('')
+    const pendingCount = useSyncStatus()
   const [price, setPrice] = useState('')
   const [costPrice, setCostPrice] = useState('')
   const [error, setError] = useState('')
@@ -110,13 +112,20 @@ export default function EditProductPage() {
 
   if (loading) return <main style={{ padding: '2rem' }}>Loading...</main>
 
-  if (savedOffline) {
+    if (savedOffline) {
     return (
       <main style={{ padding: '2rem', maxWidth: 400 }}>
         <h1>Saved Offline</h1>
-        <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
-          No internet connection — this update was saved on your device and will sync to the cloud automatically once you're back online.
-        </p>
+        {pendingCount !== null && pendingCount > 0 && (
+          <p style={{ background: '#fef3c7', padding: 12, borderRadius: 4 }}>
+            No internet connection — this product was saved on your device and will sync to the cloud automatically once you're back online.
+          </p>
+        )}
+        {pendingCount === 0 && (
+          <p style={{ background: '#dcfce7', padding: 12, borderRadius: 4 }}>
+            ✅ Synced! This product has been saved to the cloud.
+          </p>
+        )}
         <a href="/">← Back to Products</a>
       </main>
     )

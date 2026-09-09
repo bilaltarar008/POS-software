@@ -232,6 +232,22 @@ export default function NewInvoicePage() {
           ))}
         </select>
 
+                <label style={{ display: 'block', marginBottom: 4 }}>Customer</label>
+        <select
+          value={partyId}
+          onChange={(e) => setPartyId(e.target.value)}
+          required
+          style={{ display: 'block', marginBottom: 8, width: '100%', padding: 8 }}
+        >
+          <option value="">Select a customer</option>
+          {customers.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <a href="/parties/new" style={{ fontSize: 14, color: '#0070f3', display: 'inline-block', marginBottom: 16 }}>
+          + Add a new customer
+        </a>
+
         <label style={{ display: 'block', marginBottom: 4 }}>Broker (optional)</label>
         <select
           value={brokerId}

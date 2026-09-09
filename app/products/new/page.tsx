@@ -41,6 +41,28 @@ export default function NewProductPage() {
     e.preventDefault()
     setSaving(true)
     setError('')
+        const priceNum = parseFloat(price)
+    const costNum = parseFloat(costPrice) || 0
+
+    if (!name.trim()) {
+      setError('Product name cannot be empty.')
+      setSaving(false)
+      return
+    }
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setError('Price per maund must be a positive number.')
+      setSaving(false)
+      return
+    }
+    if (costNum < 0) {
+      setError('Cost price cannot be negative.')
+      setSaving(false)
+      return
+    }
+    if (costNum > priceNum) {
+      setError('Warning: cost price is higher than sale price — this product would sell at a loss. Save again to confirm if this is intentional.')
+      // Note: this one is a soft warning, not a hard block — see below
+    }
 
     const newProduct = {
       id: uuidv4(),

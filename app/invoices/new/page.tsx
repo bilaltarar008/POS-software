@@ -59,7 +59,7 @@ export default function NewInvoicePage() {
 
       try {
         const { data, error } = await withTimeout(
-          supabase.from('products').select('id, name, price_per_maund, cost_price_per_maund').order('name')
+          supabase.from('products').select('id, name, price_per_maund, cost_price_per_maund').eq('is_active', true).order('name')
         )
         if (error) throw error
         setProducts(data || [])
@@ -112,6 +112,32 @@ export default function NewInvoicePage() {
     e.preventDefault()
     setSaving(true)
     setError('')
+
+    if (!partyId) {
+      setError('Please select a customer.')
+      setSaving(false)
+      return
+    }
+    if (items.some((item) => item.weightKg <= 0)) {
+      setError('Every item must have a weight greater than zero.')
+      setSaving(false)
+      return
+    }
+    if (items.some((item) => !item.productId)) {
+      setError('Please select a product for every item.')
+      setSaving(false)
+      return
+    }
+    if (paidNum < 0) {
+      setError('Amount paid cannot be negative.')
+      setSaving(false)
+      return
+    }
+    if (paidNum > grandTotal) {
+      setError('Amount paid cannot exceed the grand total. (If they overpaid, record it as a separate payment afterward.)')
+      setSaving(false)
+      return
+    }
 
     const invoiceId = uuidv4()
 

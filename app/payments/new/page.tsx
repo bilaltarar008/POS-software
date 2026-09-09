@@ -37,12 +37,19 @@ export default function NewPaymentPage() {
     fetchParties()
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
 
     const amt = parseFloat(amount)
+
+    if (isNaN(amt) || amt <= 0) {
+      setError('Amount must be a positive number.')
+      setSaving(false)
+      return
+    }
+
     const entry = {
       id: uuidv4(),
       party_id: partyId,

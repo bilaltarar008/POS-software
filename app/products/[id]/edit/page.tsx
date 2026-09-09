@@ -77,11 +77,30 @@ export default function EditProductPage() {
     setSaving(true)
     setError('')
 
+    const priceNum = parseFloat(price)
+    const costNum = parseFloat(costPrice) || 0
+
+    if (!name.trim()) {
+      setError('Product name cannot be empty.')
+      setSaving(false)
+      return
+    }
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setError('Price per maund must be a positive number.')
+      setSaving(false)
+      return
+    }
+    if (costNum < 0) {
+      setError('Cost price cannot be negative.')
+      setSaving(false)
+      return
+    }
+
     const updatedProduct = {
       category_id: categoryId,
       name: name,
-      price_per_maund: parseFloat(price),
-      cost_price_per_maund: parseFloat(costPrice) || 0,
+      price_per_maund: priceNum,
+      cost_price_per_maund: costNum,
     }
 
     const online = await isOnline()
@@ -100,6 +119,20 @@ export default function EditProductPage() {
       setSavedOffline(true)
       setSaving(false)
     }
+  }
+
+  const handleDeactivate = async () => {
+    if (!confirm('Deactivate this product? It will no longer appear when creating new invoices, but historical invoices remain unaffected.')) {
+      return
+    }
+    setSaving(true)
+    const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id)
+    if (error) {
+      setError(error.message)
+      setSaving(false)
+      return
+    }
+    router.push('/')
   }
 
   if (loading) return <main className="page-container">Loading...</main>
@@ -176,6 +209,14 @@ export default function EditProductPage() {
 
         <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
           {saving ? 'Saving...' : 'Update Product'}
+        </button>
+        <button
+          type="button"
+          onClick={handleDeactivate}
+          disabled={saving}
+          className="ml-2 px-4 py-2 border border-red-300 text-red-600 rounded-md hover:bg-red-50"
+        >
+          Deactivate Product
         </button>
       </form>
     </main>

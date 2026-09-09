@@ -17,7 +17,7 @@ export default function Home() {
         const { data, error } = await withTimeout(
           supabase
             .from('products')
-            .select('id, category_id, name, price_per_maund, cost_price_per_maund, categories(name)')
+            .select('id, category_id, name, price_per_maund, cost_price_per_maund, is_active, categories(name)')
             .order('name')
         )
         if (error) throw error
@@ -70,10 +70,10 @@ export default function Home() {
             </tr>
           </thead>
           <tbody>
-            {products.map((p: any) => (
-              <tr key={p.id}>
+              {products.map((p: any) => (
+              <tr key={p.id} className={p.is_active === false ? 'opacity-50' : ''}>
                 <td>{p.categories?.name}</td>
-                <td>{p.name}</td>
+                <td>{p.name}{p.is_active === false ? ' (Inactive)' : ''}</td>
                 <td>Rs. {p.price_per_maund}</td>
                 <td><a href={`/products/${p.id}/edit`} className="text-blue-600 hover:underline">Edit</a></td>
               </tr>

@@ -22,12 +22,12 @@ export default function NewPartyPage() {
     setSaving(true)
     setError('')
 
-    const newParty = {
+        const newParty = {
       id: uuidv4(),
       name,
       type,
       phone: phone || null,
-      brokerage_fee_percent: type === 'broker' ? parseFloat(brokerageFee) || 1.6 : null,
+      brokerage_fee_percent: type === 'broker' ? parseFloat(brokerageFee) || 1.6 : undefined,
     }
 
     const online = await isOnline()
